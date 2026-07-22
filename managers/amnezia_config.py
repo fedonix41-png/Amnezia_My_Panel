@@ -22,6 +22,9 @@ import struct
 import zlib
 from urllib.parse import urlparse, parse_qs, unquote
 
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives import serialization
+
 _WG_DEFAULT_PORT = 55424
 _DEFAULT_DNS1 = "1.1.1.1"
 _DEFAULT_DNS2 = "1.0.0.1"
@@ -155,6 +158,21 @@ def _detect_awg_version(config_map: dict[str, str]) -> str | None:
     return None
 
 
+def _derive_pubkey(priv: str) -> str:
+    if not priv:
+        return ""
+    try:
+        priv_bytes = base64.b64decode(priv)
+        pub = X25519PrivateKey.from_private_bytes(priv_bytes).public_key()
+        pub_bytes = pub.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+        return base64.b64encode(pub_bytes).decode("ascii")
+    except Exception:
+        return ""
+
+
 def _build_wg_json(
     config_map: dict[str, str],
     raw_config: str,
@@ -186,12 +204,17 @@ def _build_wg_json(
     for f in _LC_AWG:
         last_config[f] = config_map.get(f, "")
 
+    priv_key = config_map.get("PrivateKey", "")
+    pub_key = _derive_pubkey(priv_key)
+    client_ip_raw = config_map.get("Address", "")
+    client_ip = client_ip_raw.split("/")[0] if "/" in client_ip_raw else client_ip_raw
+
     last_config.update({
         "allowed_ips": allowed_ips,
-        "clientId": "",
-        "client_ip": config_map.get("Address", ""),
-        "client_priv_key": config_map.get("PrivateKey", ""),
-        "client_pub_key": "",
+        "clientId": pub_key,
+        "client_ip": client_ip,
+        "client_priv_key": priv_key,
+        "client_pub_key": pub_key,
         "config": raw_config.strip(),
         "hostName": host_name,
         "mtu": config_map.get("MTU", _DEFAULT_MTU),
@@ -228,11 +251,15 @@ def _build_wg_json(
 
     # PHP: protocol key comes BEFORE 'container' in the dict
     container_entry: dict = {proto_key: proto_section, "container": container}
-
+    
+    # The Amnezia client might validate description against hostName or expect it to be a valid string.
+    # PHP reference sets description to hostName if not provided.
+    description = host_name
+    
     return {
         "containers": [container_entry],
         "defaultContainer": container,
-        "description": _DESCRIPTION,
+        "description": description,
         "dns1": dns1,
         "dns2": dns2,
         "hostName": host_name,
@@ -328,38 +355,41 @@ def build_amnezia_config(
 def generate_qr_content(
     config_text: str, protocol_hint: str | None = None
 ) -> str:
-    """QR code content for Amnezia client scanner.
-    
-    The Amnezia scanner expects Qt QDataStream serialization:
-    Version magic (0x07C00200) + QByteArray(qCompress(JSON)).
-    It does not expect the ``vpn://`` prefix.
+    """
+    Generate the Base64 URL encoded configuration payload for Amnezia VPN QR code scanning.
+    For standard protocols, this returns the B8AB (0x07C00100) compressed JSON format WITHOUT vpn:// prefix.
     """
     config = build_amnezia_config(config_text, protocol_hint)
     if not config:
         return ""
     
     raw = json.dumps(config, ensure_ascii=False, indent=4, separators=(",", ": ")).encode("utf-8")
-    compressed = qt_compress(raw)
     
-    version = 0x07C00200
-    length = len(compressed)
-    # Pack version (uint32) and QByteArray length (uint32)
-    envelope = struct.pack(">II", version, length) + compressed
-    return base64url_encode(envelope)
+    version = 0x07C00100
+    compressed = zlib.compress(raw, 9)
+    # Qt QByteArray format expects the length of the array.
+    # The array contains the 4-byte uncompressed length + the zlib payload.
+    # So the length must include the 4 bytes of the uncompressed length.
+    header = struct.pack(">III", version, len(compressed) + 4, len(raw))
+    payload = header + compressed
+    return base64url_encode(payload)
 
 
 def generate_vpn_link(
     config_text: str, protocol_hint: str | None = None
 ) -> str:
-    """``vpn://`` text link.
-    
-    Used when clicking a shareable link. The app parses it differently
-    than the QR scanner and expects ``vpn://`` + base64url(qCompress(JSON)).
+    """
+    Generate the shareable vpn:// link for Amnezia VPN.
+    The Amnezia vpn:// URL format expects:
+    vpn:// + base64url(uint32 uncompressed_len + zlib_compressed_json)
     """
     config = build_amnezia_config(config_text, protocol_hint)
     if not config:
         return ""
-    
+        
     raw = json.dumps(config, ensure_ascii=False, indent=4, separators=(",", ": ")).encode("utf-8")
-    encoded = base64url_encode(qt_compress(raw))
+    compressed = zlib.compress(raw, 9)
+    header = struct.pack(">I", len(raw))
+    
+    encoded = base64url_encode(header + compressed)
     return f"vpn://{encoded}"

@@ -102,6 +102,12 @@ class TelegramAPI:
         r = await self.client.post(f"{self.base}/sendDocument", data=data, files=files, timeout=30)
         return r.json()
 
+    async def send_photo(self, chat_id, photo: bytes, caption: str = ""):
+        files = {"photo": ("qr.png", photo, "image/png")}
+        data = {"chat_id": str(chat_id), "caption": caption}
+        r = await self.client.post(f"{self.base}/sendPhoto", data=data, files=files, timeout=30)
+        return r.json()
+
 
 # ----------------------------------------------------------------------- #
 #  Generic helpers
@@ -522,6 +528,32 @@ async def _handle_get_config(api: TelegramAPI, chat_id: int, message_id: int, ca
     await _send_config_by_client(api, chat_id, servers[sid], conn.get("protocol", "awg"), conn.get("client_id"), conn.get("name", "Connection"), generate_vpn_link_fn)
 
 
+async def _send_qr_code(api: TelegramAPI, chat_id: int, conn_name: str, config: str, proto: str):
+    from managers.amnezia_config import generate_qr_content
+    try:
+        is_link_proto = _proto_base(proto) in ("xray", "telemt")
+        qr_text = config if is_link_proto else generate_qr_content(config)
+        if not qr_text:
+            return
+
+        import qrcode
+        import io
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_text)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        bio = io.BytesIO()
+        img.save(bio, format="PNG")
+        await api.send_photo(chat_id, photo=bio.getvalue(), caption=f"📷 QR Code: {conn_name}")
+    except Exception as e:
+        logger.error(f"Bot: error generating QR code: {e}")
+
+
 async def _send_config_by_client(api: TelegramAPI, chat_id: int, server: dict, proto: str, client_id: str, conn_name: str, generate_vpn_link_fn: Callable):
     loading_result = await api.send_message(chat_id, f"⏳ Fetching config for <b>{_e(conn_name)}</b>...")
     loading_msg_id = loading_result.get("result", {}).get("message_id")
@@ -566,6 +598,8 @@ async def _send_config_by_client(api: TelegramAPI, chat_id: int, server: dict, p
                 await api.send_message(chat_id, f"🔗 <b>VPN Link</b> (tap to copy):\n<code>{_e(vpn_link)}</code>")
             filename = f"{str(conn_name).replace(' ', '_')}.conf"
             await api.send_document(chat_id, filename=filename, content=config.encode("utf-8"), caption=f"📁 Config file: {conn_name}")
+        
+        await _send_qr_code(api, chat_id, conn_name, config, proto)
     except Exception as e:
         logger.exception("Bot: error getting config")
         if loading_msg_id:
@@ -914,6 +948,8 @@ async def _send_config_text(api: TelegramAPI, chat_id: int, server: dict, proto:
         if vpn_link:
             await api.send_message(chat_id, f"🔗 <b>VPN Link</b>:\n<code>{_e(vpn_link)}</code>")
         await api.send_document(chat_id, filename=f"{conn_name}.conf", content=config.encode("utf-8"), caption=f"📁 Config file: {conn_name}")
+    
+    await _send_qr_code(api, chat_id, conn_name, config, proto)
 
 
 async def _admin_toggle_client(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, client_id: str, enable: bool, load_data_fn: Callable):

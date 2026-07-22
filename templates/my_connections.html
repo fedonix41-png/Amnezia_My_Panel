@@ -152,7 +152,7 @@
             new QRCode(container, {
                 text: text, width: 280, height: 280,
                 colorDark: '#000000', colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.L
+                correctLevel: QRCode.CorrectLevel.M
             });
         } catch (e) {
             container.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">${_('qr_error')}</div>`;
