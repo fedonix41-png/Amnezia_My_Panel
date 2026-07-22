@@ -9,14 +9,14 @@
 - **Язык**: Python **3.14** (`Dockerfile:3` — `FROM python:3.14-slim`).
 - **Веб-фреймворк**: **FastAPI** (ASGI) поверх **Starlette**.
   - `app.py:29` — `from fastapi import FastAPI, Request, Query, UploadFile, File`
-  - `app.py:81-88` — `app = FastAPI(title="Amnezia Web Panel", openapi_tags=OPENAPI_TAGS, redoc_url=None)`
-  - `app.py:91-103` — кастомный `/redoc`, pinned на `redoc@2`, Google Fonts отключены.
-- **Сервер приложений**: **uvicorn** (`requirements.txt:36`; `app.py:4186` — `uvicorn.run(...)`).
+  - `app.py:82` — `app = FastAPI(title="Amnezia Web Panel", openapi_tags=OPENAPI_TAGS, redoc_url=None)`
+  - `app.py:92-104` — кастомный `/redoc`, pinned на `redoc@2`, Google Fonts отключены.
+- **Сервер приложений**: **uvicorn** (`requirements.txt:36`; `app.py:2250` — `uvicorn.run(...)`).
 - **Путь запуска**:
   - `Dockerfile:27-28` — `ENTRYPOINT ["/app/docker-entrypoint.sh"]`, `CMD ["python3", "app.py"]`.
   - `docker-entrypoint.sh:1-24` — валидирует `SECRET_KEY`/`MASTER_KEY`, кроме `AWP_DEV=1`, затем `exec "$@"`.
-  - `app.py:4148-4186` — `if __name__ == '__main__':` читает SSL-настройки из `data.json`, вызывает `uvicorn.run(app, host="0.0.0.0", port=<panel_port>, ssl_*)`. Порт — `settings.ssl.panel_port` (по умолчанию 5000).
-- **Lifespan**: современный ASGI context manager вместо устаревшего `@app.on_event` — `app.py:4114-4145` (`_app_lifespan`), привязан через `app.router.lifespan_context = _app_lifespan` (`app.py:4145`). Startup вызывает `_startup()` (`app.py:1725`); shutdown отменяет фоновые задачи, останавливает туннели и Telegram-бота.
+  - `app.py:2212-2250` — `if __name__ == '__main__':` читает SSL-настройки из `data.json`, вызывает `uvicorn.run(app, host="0.0.0.0", port=<panel_port>, ssl_*)`. Порт — `settings.ssl.panel_port` (по умолчанию 5000).
+- **Lifespan**: современный ASGI context manager вместо устаревшего `@app.on_event` — `app.py:2179-2209` (`_app_lifespan`), привязан через `app.router.lifespan_context = _app_lifespan` (`app.py:2209`). Startup вызывает `_startup()` (`app.py:1775`); shutdown отменяет фоновые задачи, останавливает туннели и Telegram-бота.
 - **Ключевые зависимости** (`requirements.txt`): `fastapi==0.115.12`, `starlette==0.46.2`, `uvicorn==0.34.0`, `pydantic==2.12.5`, `paramiko==3.5.1` (SSH), `cryptography==44.0.0` (Fernet), `slowapi==0.1.9` (rate-limit), `python-telegram-bot==20.7` (заявлен, но не используется — см. §10), `python-multipart==0.0.20`, `multicolorcaptcha==1.2.0`, `python-dotenv==1.2.2`, `httpx==0.25.2`, `PyYAML`, `bcrypt==5.0.0` (заявлен, но панель использует `hashlib.pbkdf2_hmac` — см. §5), `Flask==3.1.0` (legacy/не используется).
 
 ## 2. Конфигурация (`config.py`, 151 строка)
@@ -50,18 +50,18 @@
 
 - `SECRET_KEY`: синтезируется **эфемерный** `secrets.token_urlsafe(48)` (сессии не переживут рестарт) (`config.py:52-57`).
 - `MASTER_KEY`: синтезируется **эфемерный** `Fernet.generate_key()` (`config.py:85-96`). В обоих случаях выдаётся warning.
-- Также расслабляет валидацию entrypoint (`docker-entrypoint.sh:6-8`) и пропускает `TrustedHostMiddleware` (`app.py:123-124`).
+- Также расслабляет валидацию entrypoint (`docker-entrypoint.sh:6-8`) и пропускает `TrustedHostMiddleware` (`app.py:141`).
 
 ## 3. Модель данных `data.json`
 
 ### Слой загрузки/сохранения (`app.py`)
 
-- Резолв `DATA_FILE`: `app.py:130-139` — учитывает `sys.frozen` (PyInstaller), иначе каталог скрипта; basename `data.json`. Переопределяется через env `DATA_FILE` (используется docker-compose: `DATA_FILE=/app/data/data.json`, и тестами). При апгрейде — если новый путь пуст, а старый (`_LEGACY_DATA_FILE`, `app.py:139`) существует и не пуст, `_maybe_migrate_legacy_data_file` (`app.py:1687`) копирует его one-time при старте, чтобы не потерять зашифрованные секреты.
-- `DATA_LOCK = asyncio.Lock()` (`app.py:192`) — защита конкурентных записей.
-- `load_data()` (`app.py:195-221`) — `json.load` + `setdefault` по каждому top-level ключу.
-- `save_data(data)` (`app.py:224-226`) — синхронный `json.dump(..., indent=2, ensure_ascii=False)`.
-- `save_data_async(data)` (`app.py:229-232`) — `asyncio.to_thread(save_data)` под `DATA_LOCK`.
-- `get_ssh(server)` (`app.py:235-247`) — строит `SSHManager`, расшифровывая `password`/`private_key` через `decrypt_secret` (`app.py:240-241`).
+- Резолв `DATA_FILE`: `app.py:153` — учитывает `sys.frozen` (PyInstaller), иначе каталог скрипта; basename `data.json`. Переопределяется через env `DATA_FILE` (используется docker-compose: `DATA_FILE=/app/data/data.json`, и тестами). При апгрейде — если новый путь пуст, а старый (`_LEGACY_DATA_FILE`, `app.py:157`) существует и не пуст, `_maybe_migrate_legacy_data_file` (`app.py:1737`) копирует его one-time при старте, чтобы не потерять зашифрованные секреты.
+- `DATA_LOCK = asyncio.Lock()` (`app.py:210`) — защита конкурентных записей.
+- `load_data()` (`app.py:213-238`) — `json.load` + `setdefault` по каждому top-level ключу.
+- `save_data(data)` (`app.py:242-244`) — синхронный `json.dump(..., indent=2, ensure_ascii=False)`.
+- `save_data_async(data)` (`app.py:247-249`) — `asyncio.to_thread(save_data)` под `DATA_LOCK`.
+- `get_ssh(server)` (`app.py:253-265`) — строит `SSHManager`, расшифровывая `password`/`private_key` через `decrypt_secret`.
 
 ### Top-level схема
 
@@ -75,59 +75,59 @@
 }
 ```
 
-**`servers[]`** (пример `data.json:2-55`, запись `app.py:2157-2163`):
+**`servers[]`** (запись через `routers/servers.py`):
 - `name`, `host`, `ssh_port`, `username`
 - `password` *(зашифрован, см. §8)*, `private_key` *(зашифрован)*
 - `server_info` (строка ОС из `uname`), `host_fingerprint` (SHA256 SSH-публичного ключа)
-- `protocols` — dict, ключ — строка протокола (`awg2`, `awg_legacy`, `xray__2`); значение: `{installed, port, base_protocol, instance, display_name, container_name, awg_params|mode|domain...}` (запись `app.py:2670-2688`).
+- `protocols` — dict, ключ — строка протокола (`awg2`, `awg_legacy`, `xray__2`); значение: `{installed, port, base_protocol, instance, display_name, container_name, awg_params|mode|domain...}` (запись `routers/protocols.py:140-158`).
 
-**`users[]`** (`data.json:57-94`, дефолтный admin `app.py:1730-1737`):
+**`users[]`** (дефолтный admin `app.py:1780-1789`):
 - `id` (UUID), `username`, `password_hash` (PBKDF2, см. §5), `role` (`admin`|`support`|`user`), `enabled`, `created_at`
 - Шеринг: `share_enabled`, `share_token`, `share_password_hash` (nullable)
 - Трафик: `traffic_reset_strategy` (`never`|`daily`|...), `traffic_used`, `traffic_total`, `last_reset_at`, `expiration_date`
 - Опционально: `telegramId`, `email`, `description`, `traffic_limit`, `remnawave_uuid`
 
-**`user_connections[]`** (`data.json:95-116`, запись `app.py:3157-3165`):
+**`user_connections[]`** (запись через `routers/connections.py`):
 - `id` (UUID), `user_id`, `server_id` (int-индекс в `servers`), `protocol`, `client_id` (протоколо-специфичный), `name`, `created_at`, `last_bytes`
 
-**`api_tokens[]`** (запись `app.py:4029-4037`):
+**`api_tokens[]`** (запись через `routers/api_tokens.py`):
 - `id` (UUID), `name`, `token_hash` (SHA-256, никогда сырой), `token_prefix`, `user_id`, `created_at`, `last_used_at`
 
-**`settings`** (`data.json:118-149`):
+**`settings`**:
 - `appearance` `{title, logo, subtitle}`
 - `sync` `{remnawave_url, remnawave_api_key, remnawave_sync, remnawave_sync_users, remnawave_create_conns, remnawave_server_id, remnawave_protocol}`
-- `ssl` `{enabled, domain, cert_path, key_path, cert_text, key_text, panel_port}` (миграция `app.py:1779-1791`)
+- `ssl` `{enabled, domain, cert_path, key_path, cert_text, key_text, panel_port}` (миграция `app.py:1829-1841`)
 - `captcha` `{enabled}`
 - `telegram` `{token, enabled}`
 
 ### Шифрование at rest
 
-- **Fernet** применяется только к `servers[].password` и `servers[].private_key` (см. §8). Формат хранения — `"v1:<fernet-token>"`. Записи: `app.py:2159-2160` (добавление сервера), `app.py:2199-2200` (редактирование).
+- **Fernet** применяется только к `servers[].password` и `servers[].private_key` (см. §8). Формат хранения — `"v1:<fernet-token>"`. Записи — в `routers/servers.py:159-160` (добавление/редактирование сервера).
 - Хэши паролей пользователей — PBKDF2 (не Fernet) — см. §5.
-- Секреты API-токенов — **SHA-256 хэш** (односторонний), не шифруются — `app.py:1069-1072`.
-- Бэкапы `data.json` наследуют шифрование (`app.py:1836-1867`) — никогда не plaintext.
+- Секреты API-токенов — **SHA-256 хэш** (односторонний), не шифруются — `app.py:1091-1093`.
+- Бэкапы `data.json` наследуют шифрование (`routers/settings.py`) — никогда не plaintext.
 
-### Стартовые миграции (`_startup`, `app.py:1725-1794`)
+### Стартовые миграции (`_startup`, `app.py:1775-1856`)
 
-Первой строкой `_startup` вызывает `_maybe_migrate_legacy_data_file()` (`app.py:1687-1723`) — one-time rescue старого `data.json` из каталога приложения в volume-backed путь (без overwrite существующего файла). Затем: создаёт дефолтного `admin/admin`, если `users` пуст; бэкфиллит `share_*`, `traffic_*`, `last_reset_at`, `expiration_date`; инициализирует `api_tokens`; мигрирует блок SSL.
+Первой строкой `_startup` вызывает `_maybe_migrate_legacy_data_file()` (`app.py:1737-1773`) — one-time rescue старого `data.json` из каталога приложения в volume-backed путь (без overwrite существующего файла). Затем: создаёт дефолтного `admin/admin`, если `users` пуст; бэкфиллит `share_*`, `traffic_*`, `last_reset_at`, `expiration_date`; инициализирует `api_tokens`; мигрирует блок SSL; запускает фоновые задачи и Telegram-бота (`app.py:1848-1856`).
 
 ## 4. Цепочка middleware
 
 `middleware.py` (111 строк) содержит два `BaseHTTPMiddleware`; остальные — в `app.py`.
 
-**Порядок добавления (innermost → outermost), `app.py:104-124`:**
+**Порядок добавления (innermost → outermost), `app.py:105-142`:**
 
 ```
-add SessionMiddleware            # app.py:104-109  (innermost)
-add CsrfCookieMiddleware         # app.py:113
-add SlowAPIMiddleware            # app.py:114
-add SecurityHeadersMiddleware    # app.py:115
-add TrustedHostMiddleware        # app.py:123-124  (outermost; в dev пропускается)
+add SessionMiddleware            # app.py:105-110  (innermost)
+add CsrfCookieMiddleware         # app.py:131
+add SlowAPIMiddleware            # app.py:132
+add SecurityHeadersMiddleware    # app.py:133
+add TrustedHostMiddleware        # app.py:141-142  (outermost; в dev пропускается)
 ```
 
-Комментарий `app.py:111-112` фиксирует эффективный порядок запроса: **TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session**.
+Комментарий `app.py:129-130` фиксирует эффективный порядок запроса: **TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session**.
 
-### `SessionMiddleware` (`app.py:104-109`)
+### `SessionMiddleware` (`app.py:105-110`)
 - `secret_key=config.SECRET_KEY` (валидируется при загрузке).
 - `https_only=config.SESSION_COOKIE_SECURE` (флаг `Secure`).
 - `same_site=config.SESSION_COOKIE_SAMESITE`.
@@ -144,24 +144,24 @@ add TrustedHostMiddleware        # app.py:123-124  (outermost; в dev пропу
 
 ### `SlowAPIMiddleware` + обработчик rate-limit
 - `limiter = Limiter(key_func=config._rate_limit_key, default_limits=[])` (`app.py:48`).
-- `app.state.limiter = limiter` и `app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)` (`app.py:118-119`) — отдаёт JSON 429.
-- Лимиты на роуты через `@limiter.limit(...)`: captcha (`app.py:2063`), login (`app.py:2081`), все `/api/share/*` (`app.py:3635, 3610, 3626, 3649`).
+- `app.state.limiter = limiter` и `app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)` (`app.py:136-137`) — отдаёт JSON 429.
+- Лимиты на роуты через `@limiter.limit(...)` в роутерах: captcha, login, все `/api/share/*`.
 
-### `TrustedHostMiddleware` (`app.py:123-124`)
+### `TrustedHostMiddleware` (`app.py:141-142`)
 - Добавляется **только при `not config.AWP_DEV` и непустом `TRUSTED_HOSTS`** — чтобы dev-доступ по LAN/IP не блокировался.
 
 ## 5. Модель аутентификации
 
 ### Сессионная аутентификация
 
-- Login: `POST /api/auth/login` (`app.py:2080-2101`, `@limiter.limit(LOGIN_RATE_LIMIT)`).
-  - Опциональная captcha (`settings.captcha.enabled`): ответ хранится в `request.session['captcha_answer']` на эндпоинте `/api/auth/captcha` (`app.py:2071`), проверяется и стирается при логине (`app.py:2086-2091`).
-  - При успехе: `request.session['user_id'] = u['id']` (`app.py:2098`); возвращает `{status, role}`.
+- Login: `POST /api/auth/login` (`routers/auth.py`, `@limiter.limit(LOGIN_RATE_LIMIT)`).
+  - Опциональная captcha (`settings.captcha.enabled`): ответ хранится в `request.session['captcha_answer']` на эндпоинте `/api/auth/captcha` (`routers/auth.py`), проверяется и стирается при логине.
+  - При успехе: `request.session['user_id'] = u['id']`; возвращает `{status, role}`.
   - При неудаче: 401 с локализованной ошибкой.
-- Logout: `GET /logout` очищает сессию (`app.py:1994-2001`, `request.session.clear()`).
-- Текущий пользователь: `get_current_user(request)` (`app.py:1427-1435`) читает `request.session.get('user_id')`.
+- Logout: `GET /logout` очищает сессию (`routers/auth.py`, `request.session.clear()`).
+- Текущий пользователь: `get_current_user(request)` (`app.py:1449-1457`) читает `request.session.get('user_id')`.
 
-### Хэширование паролей (`app.py:1122-1134`)
+### Хэширование паролей (`app.py:1144-1156`)
 
 - `hash_password(password)`: `salt = secrets.token_hex(16)`, `hashlib.pbkdf2_hmac('sha256', ..., 100000)`, хранится как `f"{salt}${h.hex()}"`.
 - `verify_password(password, password_hash)`: сплит по `$`, повторная деривация, константное сравнение.
@@ -170,52 +170,52 @@ add TrustedHostMiddleware        # app.py:123-124  (outermost; в dev пропу
 ### Роли и авторизация
 
 - Три роли: `admin`, `support`, `user`.
-- `_check_admin(request)` (`app.py:2106-2132`) — центральный гейт, ~50 вызовов. Логика:
+- `_check_admin(request)` (`app.py:1460-1492`) — центральный гейт, ~50 вызовов. Логика:
   1. Сессионный пользователь через `get_current_user`; если role ∈ `('admin','support')` → вернуть user.
-  2. Иначе пробовать `Authorization: Bearer <token>`: резолв через `_resolve_api_token` (`app.py:2120`); если владелец enabled и admin/support — вернуть его. Best-effort обновление `last_used_at`.
+  2. Иначе пробовать `Authorization: Bearer <token>`: резолв через `_resolve_api_token`; если владелец enabled и admin/support — вернуть его. Best-effort обновление `last_used_at`.
   3. Иначе `None` → вызывающий возвращает `403 Forbidden`.
 - Роуты защищаются `if not _check_admin(request): return JSONResponse({'error':'Forbidden'}, status_code=403)`.
-- Эндпоинты обычных пользователей (`/api/my/*`) используют `get_current_user` напрямую и проверяют владение (`app.py:3236-3250`).
+- Эндпоинты обычных пользователей (`/api/my/*`) используют `get_current_user` напрямую и проверяют владение (`routers/users.py`).
 
-### API-токены (`app.py:1063-1120`)
+### API-токены (`app.py:1086-1142`)
 
-- Формат: `awp_<32 chars>` (`_generate_api_token`, `app.py:1075-1078`), ~256 бит.
-- Хранится **только как SHA-256 дайджест** (`_hash_api_token`, `app.py:1069-1072`); сырое значение возвращается один раз при создании (`app.py:4043-4051`).
-- `_resolve_api_token` (`app.py:1081-1102`) матчит дайджест, затем проверяет, что владелец существует, enabled и admin/support — отключение/понижение владельца убивает токен.
-- `_touch_api_token` (`app.py:1105-1119`) обновляет `last_used_at` не чаще раза в `API_TOKEN_TOUCH_INTERVAL = 300s` (`app.py:1066`).
+- Формат: `awp_<32 chars>` (`_generate_api_token`, `app.py:1097-1100`), ~256 бит.
+- Хранится **только как SHA-256 дайджест** (`_hash_api_token`, `app.py:1091-1093`); сырое значение возвращается один раз при создании (`routers/api_tokens.py`).
+- `_resolve_api_token` (`app.py:1103-1124`) матчит дайджест, затем проверяет, что владелец существует, enabled и admin/support — отключение/понижение владельца убивает токен.
+- `_touch_api_token` (`app.py:1127-1141`) обновляет `last_used_at` не чаще раза в `API_TOKEN_TOUCH_INTERVAL = 300s` (`app.py:1088`).
 - CSRF-middleware exempts bearer-auth (`middleware.py:48-50, 76-80`); проверено тестами (`tests/test_auth.py:102-109`).
 
 ### Публичный шеринг (отдельный flow)
 
 - Каждый пользователь может иметь `share_token` (`secrets.token_urlsafe(16)`).
-- `POST /api/share/{token}/auth` (`app.py:3652-3666`) сверяет с `share_password_hash` (если задан) и ставит `request.session[f'share_auth_{token}'] = True`.
-- `/share/{token}` и `/api/share/{token}/connections`, `/config/{id}` проверяют этот флаг (`app.py:3676-3700`).
+- `POST /api/share/{token}/auth` (`routers/sharing.py`) сверяет с `share_password_hash` (если задан) и ставит `request.session[f'share_auth_{token}'] = True`.
+- `/share/{token}` и `/api/share/{token}/connections`, `/config/{id}` проверяют этот флаг.
 
 ## 6. Реестр менеджеров протоколов
 
-### Диспетчер (`app.py:978-1002`)
+### Диспетчер (`app.py:996-1020`)
 
 `get_protocol_manager(ssh, protocol)` мапит `protocol_base(protocol)` → класс менеджера. Импорты **ленивые** (внутри функции). Фолбэк — `AWGManager(ssh)`.
 
 | `base` | Класс | Конструктор | Модуль |
 |---|---|---|---|
-| `awg` / `awg2` / `awg_legacy` (дефолт) | `AWGManager` | `(ssh_manager)` | `managers/awg_manager.py:124,132` |
+| `awg` / `awg2` / `awg_legacy` (дефолт) | `AWGManager` | `(ssh_manager)` | `managers/awg_manager.py` |
 | `xray` | `XrayManager` | `(ssh_manager, protocol='xray')` | `managers/xray_manager.py:79,86` |
-| `telemt` | `TelemtManager` | `(ssh_manager, protocol='telemt')` | `managers/telemt_manager.py:12,16` |
-| `dns` | `DNSManager` | `(ssh)` | `managers/dns_manager.py:7,8` |
-| `wireguard` | `WireGuardManager` | `(ssh_manager)` | `managers/wireguard_manager.py:52,63` |
-| `socks5` | `Socks5Manager` | `(ssh, protocol='socks5')` | `managers/socks5_manager.py:21,31` |
-| `adguard` | `AdguardManager` | `(ssh)` | `managers/adguard_manager.py:23,39` |
-| `nginx` | `NginxManager` | `(ssh, protocol='nginx')` | `managers/nginx_manager.py:23,39` |
+| `telemt` | `TelemtManager` | `(ssh_manager, protocol='telemt')` | `managers/telemt_manager.py` |
+| `dns` | `DNSManager` | `(ssh)` | `managers/dns_manager.py` |
+| `wireguard` | `WireGuardManager` | `(ssh_manager)` | `managers/wireguard_manager.py` |
+| `socks5` | `Socks5Manager` | `(ssh, protocol='socks5')` | `managers/socks5_manager.py` |
+| `adguard` | `AdguardManager` | `(ssh)` | `managers/adguard_manager.py` |
+| `nginx` | `NginxManager` | `(ssh, protocol='nginx')` | `managers/nginx_manager.py` |
 
-(`BackupManager(ssh)` — `managers/backup_manager.py:6,16`, инстанцируется напрямую в `app.py:2816`, минуя реестр.)
+(`BackupManager(ssh)` — `managers/backup_manager.py`, инстанцируется напрямую в `routers/protocols.py`, минуя реестр.)
 
-### Хелперы идентичности протоколов (`app.py:902-975`)
+### Хелперы идентичности протоколов (`app.py:920-989`)
 
-- `BASE_PROTOCOLS = ['awg','awg2','awg_legacy','xray','telemt','dns','wireguard','socks5','adguard','nginx']` (`app.py:902`).
-- `MULTI_INSTANCE_PROTOCOLS = {'awg','awg2','awg_legacy','xray','telemt','socks5'}` (`app.py:903`) — только они могут иметь несколько инстансов.
-- `protocol_base(p)` сплит по `__` (`app.py:906-907`); `protocol_instance(p)` парсит числовой суффикс (`app.py:910-917`); `protocol_key(base, idx)` строит `base__N` (`app.py:920-922`); `next_protocol_key` находит следующий свободный инстанс (`app.py:925-931`).
-- `protocol_display_name` и `protocol_container_name` — мапы base→человекочитаемое имя / Docker-контейнер (`app.py:934-971`).
+- `BASE_PROTOCOLS = ['awg','awg2','awg_legacy','xray','telemt','dns','wireguard','socks5','adguard','nginx']` (`app.py:920`).
+- `MULTI_INSTANCE_PROTOCOLS = {'awg','awg2','awg_legacy','xray','telemt','socks5'}` (`app.py:921`) — только они могут иметь несколько инстансов.
+- `protocol_base(p)` сплит по `__` (`app.py:924-925`); `protocol_instance(p)` парсит числовой суффикс (`app.py:928-935`); `protocol_key(base, idx)` строит `base__N` (`app.py:938-940`); `next_protocol_key` находит следующий свободный инстанс (`app.py:943-949`).
+- `protocol_display_name` и `protocol_container_name` — мапы base→человекочитаемое имя / Docker-контейнер (`app.py:952-989`).
 
 ### Общий (duck-typed) интерфейс
 
@@ -238,7 +238,7 @@ add TrustedHostMiddleware        # app.py:123-124  (outermost; в dev пропу
 
 ### Расхождение сигнатуры WireGuard
 
-`WireGuardManager`-методы **не принимают `protocol_type`** (одиночный инстанс). Хелпер `_manager_call(manager, method, protocol, *args)` (`app.py:1050-1055`) это нивелирует:
+`WireGuardManager`-методы **не принимают `protocol_type`** (одиночный инстанс). Хелпер `_manager_call(manager, method, protocol, *args)` (`app.py:1068-1073`) это нивелирует:
 
 ```python
 def _manager_call(manager, method, protocol, *args, **kwargs):
@@ -248,21 +248,19 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
     return fn(protocol, *args, **kwargs)
 ```
 
-Используется в `app.py:1151, 3146, 3216, 3239` и др.
-
 ### Удалённое подключение и зависимости
 
 - **Все менеджеры общаются с удалённым сервером только через инжектированный `SSHManager`** (paramiko) — своих сокетов не открывают. Команды — `ssh.run_command` / `run_sudo_command` / `run_sudo_script`; файлы — `ssh.upload_file[_sudo]` / `download_file`.
-- **Каждый протокол деплоится как Docker-контейнер** на удалённом хосте. Менеджер вызывает `check_docker_installed()` первым; `ensure_docker_installed` (`app.py:1006-1047`) ставит Docker при отсутствии.
+- **Каждый протокол деплоится как Docker-контейнер** на удалённом хосте. Менеджер вызывает `check_docker_installed()` первым; `ensure_docker_installed` (`app.py:1024-1065`) ставит Docker при отсутствии.
 - Константы контейнеров/образов:
-  - AWG: `amnezia-awg`, `amnezia-awg-legacy`, `amnezia-awg2` (`awg_manager.py:148-160`).
+  - AWG: `amnezia-awg`, `amnezia-awg-legacy`, `amnezia-awg2`.
   - Xray: `amnezia-xray`, образ `amneziavpn/amnezia-xray` (`xray_manager.py:83-84`).
   - WireGuard: `amnezia-wireguard`, образ `amneziavpn/amnezia-wg:latest` (`wireguard_manager.py:56-57`).
-  - Telemt: контейнер `telemt`, API `http://127.0.0.1:9091` через `docker exec ... curl` (`telemt_manager.py:13-14, 52-66`).
+  - Telemt: контейнер `telemt`, API `http://127.0.0.1:9091` через `docker exec ... curl`.
   - SOCKS5: `amnezia-socks5proxy`, образ `3proxy/3proxy:0.9.5` (`socks5_manager.py:23-24`).
-  - AdGuard: `amnezia-adguard`, образ `adguard/adguardhome:latest`, в сети `amnezia-dns-net` (`adguard_manager.py:25-31`).
+  - AdGuard: `amnezia-adguard`, образ `adguard/adguardhome:latest`, в сети `amnezia-dns-net`.
   - DNS: `amnezia-dns` на базе `mvance/unbound`, внутренняя сеть `172.29.172.0/24` (`dns_manager.py:45-49`).
-  - Nginx: `amnezia-nginx` (`nginx:alpine`) + sidecar `amnezia-nginx-certbot` (`certbot/certbot`) для Let's Encrypt (`nginx_manager.py:25-28`).
+  - Nginx: `amnezia-nginx` (`nginx:alpine`) + sidecar `amnezia-nginx-certbot` (`certbot/certbot`) для Let's Encrypt.
 - Инстанс-суффиксация: multi-instance протоколы считают имена контейнеров/каталогов как `name-N` при `instance > 1` (`awg_manager.py:148-160`, `xray_manager.py:103-106`, `telemt_manager.py:32-35`).
 
 ## 7. SSH-слой (`managers/ssh_manager.py`, 285 строк)
@@ -277,7 +275,7 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
   - Если `expected` отпечаток задан и предложенный ключ отличается → `paramiko.SSHException` (защита от MITM/переустановки).
   - Если `expected` — `None` (первое подключение) → принимает и запоминает ключ.
   - OpenSSH-стиль `SHA256:...` отпечатков через `_sha256_fingerprint` (`ssh_manager.py:17-20`).
-- **Отпечаток пинится только после успешного handshake** (`ssh_manager.py:104-114`): легитимный предыдущий пин не перезаписывается при более поздней неудаче (DNS/auth/timeout). Колбэк `on_fingerprint` сохраняет пин через лямбду в `get_ssh` (`app.py:243-246`).
+- **Отпечаток пинится только после успешного handshake** (`ssh_manager.py:104-113`): легитимный предыдущий пин не перезаписывается при более поздней неудаче (DNS/auth/timeout). Колбэк `on_fingerprint` сохраняет пин через лямбду в `get_ssh` (`app.py:261-264`).
 
 ### Аутентификация
 
@@ -315,7 +313,7 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
   - `encrypt_secret(plaintext)` (`secrets.py:44-57`): пусто → `""`; уже `v1:` → как есть (идемпотентно); иначе `v1:<token>`.
   - `decrypt_secret(value)` (`secrets.py:60-83`): пусто → `""`; не `v1:` → без изменений (legacy plaintext passthrough); `v1:` → расшифровка; плохой токен → `SecretError` (ловит `InvalidToken` + `UnicodeDecodeError`).
   - `is_encrypted(value)` (`secrets.py:86-88`): True, если начинается с `v1:`.
-- **Где хранятся зашифрованные поля**: только `servers[].password` и `servers[].private_key`. Запись: `app.py:2159-2160`; чтение: `app.py:240-241`, `app.py:2199-2200`.
+- **Где хранятся зашифрованные поля**: только `servers[].password` и `servers[].private_key`. Запись: `routers/servers.py`; чтение: `app.py:258-259`.
 - **Миграция**: `scripts/migrate_secrets.py` (115 строк) обходит каждый сервер, шифрует `password`/`private_key` без `v1:`, пишет атомарно (`os.replace`) после бэкапа. Отказывается работать с `AWP_DEV=1` без `--force` (`migrate_secrets.py:104-114`).
 - **Потеря ключа = потеря секретов**; описано в docstring модуля (`secrets.py:8-9`) и `.env.example:13-15`.
 
@@ -327,15 +325,15 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 | Роутер | Модуль | Описание и конечные точки |
 |---|---|---|
-| **Аутентификация** | [`routers/auth.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/auth.py) | `GET /api/auth/captcha`, `POST /api/auth/login` (rate-limited, капча, сессии). |
-| **Шаблоны** | [`routers/templates.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/templates.py) | HTML-страницы Jinja2 (`/login`, `/set_lang/{lang}`, `/logout`, `/`, `/server/{id}`, `/users`, `/my`). |
-| **Серверы** | [`routers/servers.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/servers.py) | Управление SSH-серверами (`/api/servers/add`, `/edit`, `/ping`, `/reset-fingerprint`, `/reorder`, `/delete`, `/reboot`, `/clear`, `/stats`, `/check`). |
-| **Протоколы** | [`routers/protocols.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/protocols.py) | Установка протоколов (`/install`, `/uninstall`), управление бэкапами, Docker-контейнерами, SOCKS5, Nginx. |
-| **Подключения** | [`routers/connections.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/connections.py) | Управление VPN-клиентами (`/api/servers/{id}/connections/...` — GET, add, remove, edit, config, toggle). |
-| **Пользователи** | [`routers/users.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/users.py) | Пользователи панелей (`/api/users/...` — GET, add, update, delete, toggle, user connections, self-service `/api/my/connections`). |
-| **Шеринг** | [`routers/sharing.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/sharing.py) | Публичные ссылки доступа (`/share/{token}`, `/api/share/{token}/...` — auth, connections, config). |
-| **Настройки** | [`routers/settings.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/settings.py) | Настройки панели (`/settings`, `/api/settings/...`), управление туннелями (cloudflare/ngrok), Cloudflare WARP, Telegram-ботом, синхронизация с Remnawave, бэкап/восстановление `data.json`. |
-| **API-токены** | [`routers/api_tokens.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/api_tokens.py) | Выпуск и аннулирование Bearer-токенов (`/api/settings/tokens/...`). |
+| **Аутентификация** | `routers/auth.py` | `GET /api/auth/captcha`, `POST /api/auth/login` (rate-limited, капча, сессии). |
+| **Шаблоны** | `routers/templates.py` | HTML-страницы Jinja2 (`/login`, `/set_lang/{lang}`, `/logout`, `/`, `/server/{id}`, `/users`, `/my`). |
+| **Серверы** | `routers/servers.py` | Управление SSH-серверами (`/api/servers/add`, `/edit`, `/ping`, `/reset-fingerprint`, `/reorder`, `/delete`, `/reboot`, `/clear`, `/stats`, `/check`). |
+| **Протоколы** | `routers/protocols.py` (523 строки) | Установка протоколов (`/api/servers/{id}/install` → `api_install_protocol` на строке 65, `/uninstall`), управление бэкапами, Docker-контейнерами, SOCKS5, Nginx. |
+| **Подключения** | `routers/connections.py` | Управление VPN-клиентами (`/api/servers/{id}/connections/...` — GET, add, remove, edit, config, toggle). |
+| **Пользователи** | `routers/users.py` | Пользователи панелей (`/api/users/...` — GET, add, update, delete, toggle, user connections, self-service `/api/my/connections`). |
+| **Шеринг** | `routers/sharing.py` | Публичные ссылки доступа (`/share/{token}`, `/api/share/{token}/...` — auth, connections, config). |
+| **Настройки** | `routers/settings.py` | Настройки панели (`/settings`, `/api/settings/...`), управление туннелями (cloudflare/ngrok), Cloudflare WARP, Telegram-ботом, синхронизация с Remnawave, бэкап/восстановление `data.json`. |
+| **API-токены** | `routers/api_tokens.py` | Выпуск и аннулирование Bearer-токенов (`/api/settings/tokens/...`). |
 
 ### Паттерн взаимодействия роутеров и `app.py`
 - Роутеры импортируют `app` как `import app as app_module` для использования общих функций и состояния (`load_data`, `save_data`, `get_ssh`, `_check_admin`, `limiter`, `DATA_LOCK`).
@@ -345,6 +343,7 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
   app.include_router(auth.router)
   ...
   ```
+  (`app.py:2029-2039`)
 - Для сохранения полного контракта вызовов `app.py` объявляет псевдонимы хэндлеров и Pydantic-моделей:
   ```python
   LoginRequest = auth.LoginRequest
@@ -353,22 +352,21 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 Порядок тегов OpenAPI кураторски задан в `OPENAPI_TAGS` (`app.py:68-79`) и драйвит `/docs` и `/redoc`.
 
-
-## 10. Telegram-бот (`telegram_bot.py`, 1137 строк)
+## 10. Telegram-бот (`telegram_bot.py`, 1332 строки)
 
 ### Жизненный цикл
 
 - Импортирован `app.py:61` как `import telegram_bot as tg_bot`.
 - **Запускается in-process как asyncio-таск**, не отдельным процессом. Общий `data.json` через инжектированные колбэки.
 - `launch_bot(token, load_data_fn, generate_vpn_link_fn, save_data_fn=None)` (`telegram_bot.py:38-44`) — `asyncio.create_task(_run_bot(...), name="telegram_bot")`.
-- Старт из `_startup()` при `settings.telegram.enabled` и наличии токена (`app.py:1802-1806`).
-- `stop_bot()` (`telegram_bot.py:47-56`) отменяет таск; вызывается из lifespan shutdown (`app.py:4140`).
+- Старт из `_startup()` при `settings.telegram.enabled` и наличии токена (`app.py:1853-1856`).
+- `stop_bot()` (`telegram_bot.py:47-56`) отменяет таск; вызывается из lifespan shutdown (`app.py:2203-2206`).
 
 ### Архитектура (без фреймворка `python-telegram-bot`)
 
 Несмотря на `python-telegram-bot==20.7` в requirements, бот использует **самописный long-polling** поверх `httpx`:
 - `TelegramAPI` (`telegram_bot.py:62-`) оборачивает `https://api.telegram.org/bot<token>/<method>` через `httpx.AsyncClient`; методы `call`, `get_updates` (long-poll, `allowed_updates=["message","callback_query"]`), `send_message`, `edit_message`.
-- `_run_bot` (`telegram_bot.py:1004`) крутит poll-loop; `_dispatch` (`telegram_bot.py:1038`) маршрутизирует апдейты.
+- `_run_bot` (`telegram_bot.py:1188`) крутит poll-loop; `_dispatch` (`telegram_bot.py:1222`) маршрутизирует апдейты.
 - Состояние передаётся **dependency injection** `load_data_fn`, `generate_vpn_link_fn`, `save_data_fn` — бот читает/пишет тот же `data.json`.
 
 ### Возможности
@@ -377,7 +375,7 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 - **Admin-команды и inline-клавиатуры**: добавить сервер, просмотр серверов/пользователей/протоколов/клиентов, toggle контейнера, toggle/удаление/добавление клиента с привязкой к пользователю панели.
 - **Admin-гвард**: `_require_admin(load_data_fn, tg_id)` (`telegram_bot.py:580`) матчит Telegram ID с `users[].telegramId` и ролью admin/support.
 - **Mini-протокол callback_data**: `_ref(action, payload)` / `_resolve_ref(data_str)` (`telegram_bot.py:169-184`).
-- **Переиспользование менеджеров**: `_get_ssh_and_manager` (`telegram_bot.py:335`) и `_manager_call` (`telegram_bot.py:374`) зеркалят хелперы app — бот драйвит **те же классы менеджеров** (включая special-case WireGuard).
+- **Переиспользование менеджеров**: `_get_ssh_and_manager` (`telegram_bot.py:348`) и `_manager_call` (`telegram_bot.py:387`) зеркалят хелперы app — бот драйвит **те же классы менеджеров** (включая special-case WireGuard).
 
 ## 11. Туннели и деплой
 
@@ -403,20 +401,20 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 ### Публичный туннель (in-process, `app.py`)
 
-- Два провайдера в `TUNNEL_RUNTIMES = {'cloudflare': TunnelRuntime(), 'ngrok': TunnelRuntime()}` (`app.py:155-158`), под `TUNNEL_LOCK = threading.Lock()` (`app.py:159`).
+- Два провайдера в `TUNNEL_RUNTIMES = {'cloudflare': TunnelRuntime(), 'ngrok': TunnelRuntime()}` (`app.py:173-178`), под `TUNNEL_LOCK = threading.Lock()` (`app.py:179`).
 - `TunnelRuntime` хранит `process`, `pid`, `public_url`, `started_at`, `output`.
-- Функции: `find_tunnel_binary`, `download_tunnel_binary`, `install_tunnel_binary`, `build_tunnel_command`, `start_tunnel(provider, local_url, authtoken='')` (`app.py:745-787`, spawn через `subprocess.Popen`; ngrok использует env `NGROK_AUTHTOKEN`), `stop_tunnel` (`app.py:788`), `get_tunnel_status` (`app.py:852`).
-- Туннель форвардит на `get_panel_tunnel_target_url()` = `http(s)://127.0.0.1:<panel_port>` (`app.py:263-268`).
+- Функции: `find_tunnel_binary` (`app.py:430`), `install_tunnel_binary` (`app.py:672`), `build_tunnel_command` (`app.py:754`), `start_tunnel` (`app.py:763`, spawn через `subprocess.Popen`; ngrok использует env `NGROK_AUTHTOKEN`), `stop_tunnel` (`app.py:806`), `get_tunnel_status` (`app.py:870`).
+- Туннель форвардит на `get_panel_tunnel_target_url()` (`app.py:281`) = `http(s)://127.0.0.1:<panel_port>`.
 - В репо вендорен `bin/cloudflared`; ngrok скачивается.
 - Состояние туннелей персистится в `TUNNEL_STATE_FILE` (`tunnels_state.json`).
-- Роуты: `/api/settings/tunnels/{provider}/install|start|stop`, `DELETE /{provider}`, `GET /status` (`app.py:3774-3846`).
+- Роуты в `routers/settings.py`: `/api/settings/tunnels/{provider}/install|start|stop`, `DELETE /{provider}`, `GET /status`.
 
 ### Вариант Cloudflare WARP (опционально)
 
 - `Dockerfile.warp`: `python:3.14-slim-bookworm` + `cloudflare-warp` из `pkg.cloudflareclient.com`.
 - `docker-compose.warp.yml`: override с `cap_add: NET_ADMIN, SYS_MODULE`, `devices: /dev/net/tun`, sysctl `net.ipv4.conf.all.src_valid_mark=1`. Запуск: `docker compose -f docker-compose.yml -f docker-compose.warp.yml up -d --build`.
 - `docker-entrypoint-warp.sh`: стартует `warp-svc` в фоне перед `exec "$@"`.
-- В панели WARP управляется через `warp-cli` (`app.py:161`): `/api/settings/warp/connect|disconnect` (`app.py:3846-3867`).
+- В панели WARP управляется через `warp-cli` (`app.py:161`): `/api/settings/warp/connect|disconnect` (`routers/settings.py`).
 
 ## 12. Тесты (`tests/`)
 
@@ -424,18 +422,21 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 - **`conftest.py`** (49 строк):
   - Добавляет корень проекта в `sys.path` (`conftest.py:9`).
   - Ставит `AWP_DEV=1` **до** импорта `app` (`conftest.py:13`) — триггерит эфемерный синтез ключей, тестам не нужны реальные секреты.
-  - Фикстура `data_file` (`conftest.py:16-30`): пишет пустой `data.json` в `tmp_path`, отдаёт путь. Изоляция достигается не через env, а через прямой патч модуля (см. ниже).
-  - Фикстура `app_client` (`conftest.py:33-45`): `TestClient(_app.app, raise_server_exceptions=False)` как context manager (ASGI lifespan/startup выполняется). Патчит `_app.DATA_FILE = data_file` — `app.py` биндит путь один раз при импорте, поэтому модуль-глобал (а не env) указывает на изолированный файл каждого теста.
+  - Фикстура `data_file` (`conftest.py:16-30`): пишет пустой `data.json` в `tmp_path`, отдаёт путь. Изоляция достигается не через env, а через прямой патч модуля.
+  - Фикстура `app_client` (`conftest.py:33-45`): `TestClient(_app.app, raise_server_exceptions=False)` как context manager (ASGI lifespan/startup выполняется). Патчит `_app.DATA_FILE = data_file`.
 
 ### Что тестируется
 
 - **`test_auth.py`** (137 строк): логин успех/неверный-пароль/нет-пользователя; rate-limit → 429; CSRF-отказ без токена, приём с токеном, обход bearer, exempt логина; captcha; security headers.
 - **`test_api_tokens.py`** (334 строки): lifecycle API-токенов (create/list/revoke), bearer-auth без CSRF и без session-cookie, owner-state enforcement (disabled/downgraded владелец → токен перестаёт работать), SHA-256 hashing, ветки `_resolve_api_token`.
-- **`test_helpers.py`** (181 строка): pbkdf2 password round-trip (уникальные соли, malformed-hash fallback), vpn-link encoding, translation fallback, token-prefix/throttle, one-time legacy `data.json` migration (`_maybe_migrate_legacy_data_file`).
+- **`test_helpers.py`** (205 строк): pbkdf2 password round-trip (уникальные соли, malformed-hash fallback), vpn-link encoding, translation fallback, token-prefix/throttle, one-time legacy `data.json` migration (`_maybe_migrate_legacy_data_file`).
 - **`test_share.py`** (30 строк): share-auth 404 на плохом токене, share-страница 404, rate-limit → 429.
 - **`test_secrets.py`** (56 строк): Fernet round-trip для паролей и приватных ключей, legacy plaintext passthrough, пустые, идемпотентность `encrypt_secret`, детект `v1:`, `SecretError` на плохом токене.
+- **`test_amnezia_config.py`** (379 строк): интеграционные тесты Amnezia-конфигураций.
+- **`test_telegram_bot_ui.py`** (62 строки): тесты UI Telegram-бота.
 - **`tests/managers/test_awg_keys.py`** (30 строк): проверки `generate_wg_keypair` и `generate_awg_params`.
 - **`tests/managers/test_xray_config.py`** (148 строк): чистые проверки структуры `build_initial_server_json` (VLESS-Reality inbound, Stats/API inbound на loopback, routing, int-coercion порта, инстанс-нейминг).
+- **`tests/managers/test_wireguard_keys.py`** (17 строк): проверки WireGuard-ключей.
 
 ### Стратегия моков
 
@@ -447,9 +448,9 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 ### Шаг 1 — Регистрация идентичности (в `app.py`)
 
-1. Добавить `'foo'` в `BASE_PROTOCOLS` (`app.py:902`). В `MULTI_INSTANCE_PROTOCOLS` (`app.py:903`) — **только если** нужны несколько инстансов.
-2. Добавить отображаемое имя в `protocol_display_name` (`app.py:937-948`) и имя контейнера в `protocol_container_name` (`app.py:956-967`).
-3. Добавить ветку в `get_protocol_manager(ssh, protocol)` (`app.py:978-1002`) с ленивым импортом `FooManager`. Дефолтный фолбэк на `AWGManager` оставить последним.
+1. Добавить `'foo'` в `BASE_PROTOCOLS` (`app.py:920`). В `MULTI_INSTANCE_PROTOCOLS` (`app.py:921`) — **только если** нужны несколько инстансов.
+2. Добавить отображаемое имя в `protocol_display_name` (`app.py:952-969`) и имя контейнера в `protocol_container_name` (`app.py:971-989`).
+3. Добавить ветку в `get_protocol_manager(ssh, protocol)` (`app.py:996-1020`) с ленивым импортом `FooManager`. Дефолтный фолбэк на `AWGManager` оставить последним.
 
 ### Шаг 2 — Создание менеджера (`managers/foo_manager.py`)
 
@@ -459,16 +460,16 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 - `__init__(self, ssh_manager, protocol='foo')`: хранить `self.ssh`, выводить `self.instance`/`self.container_name` через стандартные `__`-сплит хелперы (копировать из `xray_manager.py:94-106` или `telemt_manager.py:23-35`).
 - **Статус**: `check_docker_installed()`, `check_protocol_installed(protocol_type)`, `check_container_running(protocol_type)`, `get_server_status(protocol_type)` → `{container_exists, container_running, port, protocol, base_protocol, instance, container_name}`.
 - **Жизненный цикл**: `install_protocol(protocol_type, port=None, ...)` → `{'status':'success'|'error', ...}` (зеркало `socks5_manager.py:149-203`); `remove_container(protocol_type)` — stop+rm контейнера и каталога конфига.
-- **Клиенты** (только VPN): `get_clients`, `add_client`, `remove_client`, `toggle_client`, `get_client_config`. **Все клиентские методы должны принимать `protocol_type` первым аргументом**, чтобы работал generic-диспетчер `_manager_call` — кроме single-instance протоколов (как WireGuard), тогда нужно расширить `isinstance`-ветку `_manager_call` (`app.py:1050-1055`); предпочесть multi-arg форму.
+- **Клиенты** (только VPN): `get_clients`, `add_client`, `remove_client`, `toggle_client`, `get_client_config`. **Все клиентские методы должны принимать `protocol_type` первым аргументом**, чтобы работал generic-диспетчер `_manager_call` — кроме single-instance протоколов (как WireGuard), тогда нужно расширить `isinstance`-ветку `_manager_call` (`app.py:1068-1073`); предпочесть multi-arg форму.
 - **Удалённые операции**: только `self.ssh.run_command` / `run_sudo_command` / `run_sudo_script` / `upload_file[_sudo]` / `download_file`. Валидировать пользовательские строки (domain, email) перед интерполяцией в команды (см. `nginx_manager._validate_domain`/`_validate_email`, `nginx_manager.py:96-108`); использовать `shlex.quote` для путей.
 
-### Шаг 3 — Путь установки (в `app.py`)
+### Шаг 3 — Путь установки (в `routers/protocols.py`)
 
-В `api_install_protocol` (`app.py:2590-2698`) добавить ветку `elif install_base == 'foo':` с вызовом `manager.install_protocol(...)`, расширить построение `proto_record` (`app.py:2670-2688`) для протоколо-специфичных метаданных. При необходимости новых полей — расширить Pydantic-модель `InstallProtocolRequest`.
+В `api_install_protocol` (`routers/protocols.py:65`) добавить ветку `elif install_base == 'foo':` с вызовом `manager.install_protocol(...)`, расширить построение `proto_record` (`routers/protocols.py:140-158`) для протоколо-специфичных метаданных. При необходимости новых полей — расширить Pydantic-модель `InstallProtocolRequest` (`routers/protocols.py:17-35`).
 
 ### Шаг 4 — Существующие роуты наследуются автоматически
 
-Поскольку роуты подключений используют `get_protocol_manager` + `_manager_call` (`app.py:3123-3288`), `add`/`remove`/`toggle`/`config`/`clients` работают без доп. проводки, **если менеджер реализует клиентские методы со стандартной сигнатурой**. Роут toggle контейнера (`api_container_toggle`, `app.py:2917-2947`) работает автоматически (нужен только `protocol_container_name()`).
+Поскольку роуты подключений используют `get_protocol_manager` + `_manager_call` (`routers/connections.py`), `add`/`remove`/`toggle`/`config`/`clients` работают без доп. проводки, **если менеджер реализует клиентские методы со стандартной сигнатурой**. Роут toggle контейнера (`api_container_toggle`, `routers/protocols.py`) работает автоматически (нужен только `protocol_container_name()`).
 
 ### Шаг 5 — Бэкапы (опционально)
 
@@ -476,39 +477,8 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 ### Шаг 6 — Telegram-бот (опционально)
 
-Бот диспатчит динамически через `_get_ssh_and_manager`/`_manager_call` (`telegram_bot.py:335-381`) — как только `get_protocol_manager` узнаёт `foo`, потоки browsing/toggle/add/remove/config бота работают. Обновить мапу отображаемых имён (`_protocol_display_name`, `telegram_bot.py:132`), если нужно дружелюбное имя.
+Бот диспатчит динамически через `_get_ssh_and_manager`/`_manager_call` (`telegram_bot.py:348-381`) — как только `get_protocol_manager` узнаёт `foo`, потоки browsing/toggle/add/remove/config бота работают. Обновить мапу отображаемых имён (`_protocol_display_name`, `telegram_bot.py:145`), если нужно дружелюбное имя.
 
 ### Шаг 7 — UI (templates/static)
 
 Добавить протокол в dropdown установки и поля настроек в `templates/server.html` и соотв. JS в `static/js/`. Мапа `protocol_display_name` драйвит большинство лейблов.
-
----
-
-## 14. Стандарты качества кода и оптимизация работы с LLM-контекстом
-
-### Экономия контекстных токенов
-1. **Точечное чтение кода**: Ни при каких обстоятельствах не читать модули целиком (`app.py`, `telegram_bot.py`, `routers/*.py`). Сначала выполняется `grep_search` по сигнатуре функции, декоратору или текстовому токену, затем `view_file` с точным диапазоном строк (`StartLine`/`EndLine`).
-2. **Использование субагентов для разведки**: Для глубокого анализа незнакомой части кодовой базы или поиска паттернов в внешних библиотеках делегируйте задачу Read-Only субагентам (`research` / `explore`), чтобы не заполнять контекст основной сессии избыточными выводами.
-3. **Использование сжатых инкрементов (`/compact`)**: Перед запуском крупных архитектурных фаз или планированием новых фич вызывайте `/compact` для очистки истории инструментальных вызовов.
-
-### Стандарты кодовой базы и расширения
-1. **Модульность роутинга**: Все новые конечные точки API распределяются по соответствующим модулям в `routers/*.py` (или создаются новые роутеры в `routers/`), а в `app.py` регистрируются через `app.include_router(...)`.
-2. **Сохранение обратной совместимости**: Любые рефакторинги не должны ломать импорты вид `from app import ...`. При переносе типов или функций из `app.py` в модули обязательно добавляйте алиас-экспорт в `app.py`.
-3. **Безопасность SSH и команд**: Все shell-аргументы и пути от пользователей перед подстановкой в SSH-команды обрабатываются через `shlex.quote()` и доменные валидаторы (например, `nginx_manager._validate_domain`).
-4. **Контроль тестов**: Каждое изменение в обязательном порядке подтверждается выполнением `venv/bin/python -m pytest`. Поломка тестов недопустима.
-
----
-
-## Быстрые якоря (file:line)
-
-- Конструкция app и alias `sys.modules['app']`: `app.py:81-115`. Порядок middleware: `app.py:125-145`. Монтирование роутеров: `app.py:2020-2035`. Lifespan: `app.py:2155-2185`. `uvicorn.run`: `app.py:2188-2233`.
-
-- Слой данных: `load_data` `app.py:216`, `save_data` `app.py:245`, `save_data_async` `app.py:250`, `get_ssh` `app.py:256`.
-- Auth & Security: `_check_admin` `app.py:1105`, `get_current_user` `app.py:1427`, `hash_password`/`verify_password` `app.py:1122`/`1124`.
-- Роутеры API: [`routers/`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers) (`auth.py`, `templates.py`, `servers.py`, `protocols.py`, `connections.py`, `users.py`, `sharing.py`, `settings.py`, `api_tokens.py`).
-- API-токены: `routers/api_tokens.py`, генерация/хэш `app.py:1063-1120`.
-- Реестр протоколов: `BASE_PROTOCOLS` `app.py:902`, `get_protocol_manager` `app.py:999`, `_manager_call` `app.py:1050`.
-- Секреты: `managers/secrets.py`. SSH: `managers/ssh_manager.py`.
-- Туннели: `TUNNEL_RUNTIMES` `app.py:155`, `start_tunnel` `app.py:766`, `stop_tunnel` `app.py:809`.
-- Telegram: `launch_bot` `telegram_bot.py:38`, `stop_bot` `telegram_bot.py:47`, `_run_bot` `telegram_bot.py:1004`.
-

@@ -96,17 +96,24 @@ class TelegramAPI:
     async def answer_callback(self, callback_query_id: str, text: str = ""):
         await self.call("answerCallbackQuery", callback_query_id=callback_query_id, text=text)
 
-    async def send_document(self, chat_id, filename: str, content: bytes, caption: str = ""):
+    async def send_document(self, chat_id, filename: str, content: bytes, caption: str = "", reply_markup=None, parse_mode="HTML"):
+        import json
         files = {"document": (filename, content, "text/plain")}
-        data = {"chat_id": str(chat_id), "caption": caption}
+        data = {"chat_id": str(chat_id), "caption": caption, "parse_mode": parse_mode}
+        if reply_markup:
+            data["reply_markup"] = json.dumps(reply_markup)
         r = await self.client.post(f"{self.base}/sendDocument", data=data, files=files, timeout=30)
         return r.json()
 
-    async def send_photo(self, chat_id, photo: bytes, caption: str = ""):
+    async def send_photo(self, chat_id, photo: bytes, caption: str = "", reply_markup=None, parse_mode="HTML"):
+        import json
         files = {"photo": ("qr.png", photo, "image/png")}
-        data = {"chat_id": str(chat_id), "caption": caption}
+        data = {"chat_id": str(chat_id), "caption": caption, "parse_mode": parse_mode}
+        if reply_markup:
+            data["reply_markup"] = json.dumps(reply_markup)
         r = await self.client.post(f"{self.base}/sendPhoto", data=data, files=files, timeout=30)
         return r.json()
+
 
 
 # ----------------------------------------------------------------------- #
@@ -505,6 +512,48 @@ async def _handle_refresh(api: TelegramAPI, chat_id: int, message_id: int, callb
     await api.edit_message(chat_id, message_id, f"<b>Your connections</b> ({len(conns)}) — tap to get config:", reply_markup=kb)
 
 
+def _format_smart_config_card(conn_name: str, server_name: str, proto: str, config: str, conn_id: Optional[str] = None, generate_vpn_link_fn: Optional[Callable] = None) -> tuple[str, dict]:
+    is_link_proto = _proto_base(proto) in ("xray", "telemt")
+    
+    text = (
+        f"✅ <b>{_e(conn_name)}</b>\n"
+        f"🌐 Server: <b>{_e(server_name)}</b>\n"
+        f"🔌 Protocol: <b>{_e(proto.upper())}</b>\n\n"
+    )
+    
+    if is_link_proto:
+        text += (
+            f"🔗 <b>Connection link</b> (tap to expand/copy):\n"
+            f"<blockquote expandable><code>{_e(config)}</code></blockquote>"
+        )
+    else:
+        vpn_link = generate_vpn_link_fn(config) if (config and generate_vpn_link_fn) else ""
+        if vpn_link:
+            text += (
+                f"🔗 <b>VPN Link</b> (tap to expand/copy):\n"
+                f"<blockquote expandable><code>{_e(vpn_link)}</code></blockquote>\n\n"
+            )
+        
+        text += (
+            f"📄 <b>Configuration</b> (tap to expand/copy):\n"
+            f"<blockquote expandable><code>{_e(config)}</code></blockquote>"
+        )
+    
+    inline_keyboard = []
+    if conn_id:
+        action_row = []
+        action_row.append({"text": "📱 QR-код", "callback_data": f"qr:{conn_id}"})
+        if not is_link_proto:
+            action_row.append({"text": "📁 Скачать .conf", "callback_data": f"dl:{conn_id}"})
+        inline_keyboard.append(action_row)
+        inline_keyboard.append([{"text": "🔙 К подключениям", "callback_data": "refresh"}])
+    else:
+        inline_keyboard.append([{"text": "❌ Закрыть", "callback_data": "del_msg"}])
+
+    return text, {"inline_keyboard": inline_keyboard}
+
+
+
 async def _handle_get_config(api: TelegramAPI, chat_id: int, message_id: int, callback_id: str, conn_id: str, tg_id: str, load_data_fn: Callable, generate_vpn_link_fn: Callable):
     await api.answer_callback(callback_id, "Fetching config...")
 
@@ -525,38 +574,31 @@ async def _handle_get_config(api: TelegramAPI, chat_id: int, message_id: int, ca
         await api.send_message(chat_id, "❌ Server not found.")
         return
 
-    await _send_config_by_client(api, chat_id, servers[sid], conn.get("protocol", "awg"), conn.get("client_id"), conn.get("name", "Connection"), generate_vpn_link_fn)
+    await _send_config_by_client(
+        api, chat_id, servers[sid], conn.get("protocol", "awg"),
+        conn.get("client_id"), conn.get("name", "Connection"), generate_vpn_link_fn,
+        conn_id=conn_id, message_id=message_id
+    )
 
 
-async def _send_qr_code(api: TelegramAPI, chat_id: int, conn_name: str, config: str, proto: str):
-    from managers.amnezia_config import generate_qr_content
-    try:
-        is_link_proto = _proto_base(proto) in ("xray", "telemt")
-        qr_text = config if is_link_proto else generate_qr_content(config)
-        if not qr_text:
-            return
+async def _send_config_by_client(
+    api: TelegramAPI,
+    chat_id: int,
+    server: dict,
+    proto: str,
+    client_id: str,
+    conn_name: str,
+    generate_vpn_link_fn: Callable,
+    conn_id: Optional[str] = None,
+    message_id: Optional[int] = None
+):
+    if message_id:
+        await api.edit_message(chat_id, message_id, f"⏳ Fetching config for <b>{_e(conn_name)}</b>...")
+        loading_msg_id = message_id
+    else:
+        loading_result = await api.send_message(chat_id, f"⏳ Fetching config for <b>{_e(conn_name)}</b>...")
+        loading_msg_id = loading_result.get("result", {}).get("message_id")
 
-        import qrcode
-        import io
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(qr_text)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        bio = io.BytesIO()
-        img.save(bio, format="PNG")
-        await api.send_photo(chat_id, photo=bio.getvalue(), caption=f"📷 QR Code: {conn_name}")
-    except Exception as e:
-        logger.error(f"Bot: error generating QR code: {e}")
-
-
-async def _send_config_by_client(api: TelegramAPI, chat_id: int, server: dict, proto: str, client_id: str, conn_name: str, generate_vpn_link_fn: Callable):
-    loading_result = await api.send_message(chat_id, f"⏳ Fetching config for <b>{_e(conn_name)}</b>...")
-    loading_msg_id = loading_result.get("result", {}).get("message_id")
     try:
         proto_info = server.get("protocols", {}).get(proto, {})
         port = proto_info.get("port", "55424")
@@ -575,37 +617,145 @@ async def _send_config_by_client(api: TelegramAPI, chat_id: int, server: dict, p
                 await api.edit_message(chat_id, loading_msg_id, "❌ Failed to retrieve configuration.")
             return
 
-        if loading_msg_id:
-            await api.call("deleteMessage", chat_id=chat_id, message_id=loading_msg_id)
-
         server_name = server.get("name") or server.get("host", "Unknown")
-        await api.send_message(chat_id, f"✅ <b>{_e(conn_name)}</b>\n🌐 Server: <b>{_e(server_name)}</b>\n🔌 Protocol: <b>{_e(proto.upper())}</b>")
+        card_text, reply_markup = _format_smart_config_card(
+            conn_name=conn_name,
+            server_name=server_name,
+            proto=proto,
+            config=config,
+            conn_id=conn_id,
+            generate_vpn_link_fn=generate_vpn_link_fn
+        )
 
-        is_link_proto = _proto_base(proto) in ("xray", "telemt")
-        if is_link_proto:
-            await api.send_message(chat_id, f"🔗 <b>Connection link</b> (tap to copy):\n<code>{_e(config)}</code>")
+        if loading_msg_id:
+            await api.edit_message(chat_id, loading_msg_id, card_text, reply_markup=reply_markup)
         else:
-            MAX_LEN = 4000
-            if len(config) <= MAX_LEN:
-                await api.send_message(chat_id, f"<b>📄 Configuration:</b>\n<pre>{_e(config)}</pre>")
-            else:
-                chunks = [config[i:i + MAX_LEN] for i in range(0, len(config), MAX_LEN)]
-                for i, chunk in enumerate(chunks, 1):
-                    await api.send_message(chat_id, f"<b>📄 Configuration (part {i}/{len(chunks)}):</b>\n<pre>{_e(chunk)}</pre>")
-
-            vpn_link = generate_vpn_link_fn(config) if config else ""
-            if vpn_link:
-                await api.send_message(chat_id, f"🔗 <b>VPN Link</b> (tap to copy):\n<code>{_e(vpn_link)}</code>")
-            filename = f"{str(conn_name).replace(' ', '_')}.conf"
-            await api.send_document(chat_id, filename=filename, content=config.encode("utf-8"), caption=f"📁 Config file: {conn_name}")
-        
-        await _send_qr_code(api, chat_id, conn_name, config, proto)
+            await api.send_message(chat_id, card_text, reply_markup=reply_markup)
     except Exception as e:
         logger.exception("Bot: error getting config")
         if loading_msg_id:
             await api.edit_message(chat_id, loading_msg_id, f"❌ Error: {_e(e)}")
         else:
             await api.send_message(chat_id, f"❌ Error: {_e(e)}")
+
+
+async def _handle_send_qr(api: TelegramAPI, chat_id: int, callback_id: str, conn_id: str, tg_id: str, load_data_fn: Callable, generate_vpn_link_fn: Callable):
+    await api.answer_callback(callback_id, "Generating QR code...")
+
+    panel_user = _find_user(load_data_fn, tg_id)
+    if not panel_user:
+        await api.send_message(chat_id, "❌ Access denied.")
+        return
+
+    data = load_data_fn()
+    conn = next((c for c in data.get("user_connections", []) if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
+    if not conn:
+        await api.send_message(chat_id, "❌ Connection not found.")
+        return
+
+    servers = data.get("servers", [])
+    sid = conn.get("server_id")
+    if not isinstance(sid, int) or sid >= len(servers):
+        await api.send_message(chat_id, "❌ Server not found.")
+        return
+
+    server = servers[sid]
+    proto = conn.get("protocol", "awg")
+    client_id = conn.get("client_id")
+    conn_name = conn.get("name", "Connection")
+    proto_info = server.get("protocols", {}).get(proto, {})
+    port = proto_info.get("port", "55424")
+
+    def _get_cfg():
+        ssh, manager = _get_ssh_and_manager(server, proto)
+        try:
+            ssh.connect()
+            return _manager_call(manager, "get_client_config", proto, client_id, server["host"], port)
+        finally:
+            ssh.disconnect()
+
+    try:
+        config = await asyncio.to_thread(_get_cfg)
+        if not config:
+            await api.send_message(chat_id, "❌ Failed to retrieve configuration for QR.")
+            return
+
+        from managers.amnezia_config import generate_qr_content
+        is_link_proto = _proto_base(proto) in ("xray", "telemt")
+        qr_text = config if is_link_proto else generate_qr_content(config)
+        if not qr_text:
+            await api.send_message(chat_id, "❌ Could not generate QR content.")
+            return
+
+        import qrcode
+        import io
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_text)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        bio = io.BytesIO()
+        img.save(bio, format="PNG")
+
+        kb = {"inline_keyboard": [[{"text": "🗑️ Закрыть QR", "callback_data": "del_msg"}]]}
+        await api.send_photo(chat_id, photo=bio.getvalue(), caption=f"📷 <b>QR-код:</b> {_e(conn_name)}", reply_markup=kb)
+    except Exception as e:
+        logger.exception("Bot: error sending QR code")
+        await api.send_message(chat_id, f"❌ Error: {_e(e)}")
+
+
+async def _handle_download_conf(api: TelegramAPI, chat_id: int, callback_id: str, conn_id: str, tg_id: str, load_data_fn: Callable):
+    await api.answer_callback(callback_id, "Preparing .conf file...")
+
+    panel_user = _find_user(load_data_fn, tg_id)
+    if not panel_user:
+        await api.send_message(chat_id, "❌ Access denied.")
+        return
+
+    data = load_data_fn()
+    conn = next((c for c in data.get("user_connections", []) if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
+    if not conn:
+        await api.send_message(chat_id, "❌ Connection not found.")
+        return
+
+    servers = data.get("servers", [])
+    sid = conn.get("server_id")
+    if not isinstance(sid, int) or sid >= len(servers):
+        await api.send_message(chat_id, "❌ Server not found.")
+        return
+
+    server = servers[sid]
+    proto = conn.get("protocol", "awg")
+    client_id = conn.get("client_id")
+    conn_name = conn.get("name", "Connection")
+    proto_info = server.get("protocols", {}).get(proto, {})
+    port = proto_info.get("port", "55424")
+
+    def _get_cfg():
+        ssh, manager = _get_ssh_and_manager(server, proto)
+        try:
+            ssh.connect()
+            return _manager_call(manager, "get_client_config", proto, client_id, server["host"], port)
+        finally:
+            ssh.disconnect()
+
+    try:
+        config = await asyncio.to_thread(_get_cfg)
+        if not config:
+            await api.send_message(chat_id, "❌ Failed to retrieve configuration.")
+            return
+
+        filename = f"{str(conn_name).replace(' ', '_')}.conf"
+        kb = {"inline_keyboard": [[{"text": "🗑️ Закрыть", "callback_data": "del_msg"}]]}
+        await api.send_document(chat_id, filename=filename, content=config.encode("utf-8"), caption=f"📁 Config file: {_e(conn_name)}", reply_markup=kb)
+    except Exception as e:
+        logger.exception("Bot: error sending conf document")
+        await api.send_message(chat_id, f"❌ Error sending file: {_e(e)}")
+
 
 
 # ----------------------------------------------------------------------- #
@@ -939,17 +1089,15 @@ async def _admin_create_client(api: TelegramAPI, chat_id: int, message_id: int, 
 
 
 async def _send_config_text(api: TelegramAPI, chat_id: int, server: dict, proto: str, conn_name: str, config: str, generate_vpn_link_fn: Callable):
-    await api.send_message(chat_id, f"✅ <b>{_e(conn_name)}</b>\n🌐 Server: <b>{_e(server.get('name') or server.get('host'))}</b>\n🔌 Protocol: <b>{_e(proto.upper())}</b>")
-    if _proto_base(proto) in ("xray", "telemt"):
-        await api.send_message(chat_id, f"🔗 <b>Connection link</b>:\n<code>{_e(config)}</code>")
-    else:
-        await api.send_message(chat_id, f"<b>📄 Configuration:</b>\n<pre>{_e(config)}</pre>")
-        vpn_link = generate_vpn_link_fn(config) if config else ""
-        if vpn_link:
-            await api.send_message(chat_id, f"🔗 <b>VPN Link</b>:\n<code>{_e(vpn_link)}</code>")
-        await api.send_document(chat_id, filename=f"{conn_name}.conf", content=config.encode("utf-8"), caption=f"📁 Config file: {conn_name}")
-    
-    await _send_qr_code(api, chat_id, conn_name, config, proto)
+    card_text, reply_markup = _format_smart_config_card(
+        conn_name=conn_name,
+        server_name=server.get("name") or server.get("host", "Unknown"),
+        proto=proto,
+        config=config,
+        generate_vpn_link_fn=generate_vpn_link_fn
+    )
+    await api.send_message(chat_id, card_text, reply_markup=reply_markup)
+
 
 
 async def _admin_toggle_client(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, client_id: str, enable: bool, load_data_fn: Callable):
@@ -1104,12 +1252,23 @@ async def _dispatch(api: TelegramAPI, update: dict, load_data_fn: Callable, gene
         if data_str == "noop":
             await api.answer_callback(callback_id)
             return
+        if data_str == "del_msg":
+            await api.answer_callback(callback_id)
+            await api.call("deleteMessage", chat_id=chat_id, message_id=message_id)
+            return
         if data_str == "refresh":
             await _handle_refresh(api, chat_id, message_id, callback_id, tg_id, load_data_fn)
             return
         if data_str.startswith("cfg:"):
             await _handle_get_config(api, chat_id, message_id, callback_id, data_str[4:], tg_id, load_data_fn, generate_vpn_link_fn)
             return
+        if data_str.startswith("qr:"):
+            await _handle_send_qr(api, chat_id, callback_id, data_str[3:], tg_id, load_data_fn, generate_vpn_link_fn)
+            return
+        if data_str.startswith("dl:"):
+            await _handle_download_conf(api, chat_id, callback_id, data_str[3:], tg_id, load_data_fn)
+            return
+
 
         panel_user = _require_admin(load_data_fn, tg_id)
         if not panel_user:
