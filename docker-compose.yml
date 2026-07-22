@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  amnezia_panel:
+    build: .
+    image: prvtpro/amnezia-panel:latest
+    container_name: amnezia_panel
+
+    ports:
+      - "${APP_PORT:-5000}:5000"
+
+    env_file:
+      - .env
+
+    environment:
+      - DATA_FILE=/app/data/data.json
+      - TUNNEL_STATE_FILE=/app/data/tunnels_state.json
+      - BACKUP_DIR=/app/data/backups
+
+    volumes:
+      - amnezia_data:/app/data
+
+    read_only: true
+    tmpfs:
+      - /tmp:exec,size=64M
+
+    security_opt:
+      - no-new-privileges:true
+
+    cap_drop:
+      - ALL
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.connect(('localhost', 5000)); s.close()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  amnezia_data:

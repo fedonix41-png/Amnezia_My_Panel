@@ -1,0 +1,49 @@
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# PyInstaller folders
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+.mypy_cache/
+
+# User data
+data.json
+data.json.bak*
+backups/
+tunnels_state.json
+.DS_Store
+
+# Secrets / local env
+.env
+.env.local
+*.local
+
+# Generated OpenAPI dump (regenerated at runtime)
+openapi.json
+
+# Editor / IDEs
+.vscode/
+.idea/
+.kilo/
