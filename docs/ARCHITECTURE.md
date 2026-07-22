@@ -319,41 +319,40 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 - **Миграция**: `scripts/migrate_secrets.py` (115 строк) обходит каждый сервер, шифрует `password`/`private_key` без `v1:`, пишет атомарно (`os.replace`) после бэкапа. Отказывается работать с `AWP_DEV=1` без `--force` (`migrate_secrets.py:104-114`).
 - **Потеря ключа = потеря секретов**; описано в docstring модуля (`secrets.py:8-9`) и `.env.example:13-15`.
 
-## 9. Обзор API-маршрутизации
+## 9. Обзор API-маршрутизации и роутеров (`routers/`)
 
-Все роуты объявлены на едином `app` (без `APIRouter`). Группировка по тегу/префиксу:
+В рамках декомпозиции монолита `app.py` конечные точки перенесены в модульный пакет `routers/` с использованием `fastapi.APIRouter`. Для **100% обратной совместимости** `app.py` монтирует роутеры через `app.include_router(...)` и ре-экспортирует функции хэндлеров и Pydantic-модели (как псевдонимы), что гарантирует работоспособность внешних вызовов, тестов и Telegram-бота без каких-либо изменений.
 
-### HTML-страницы (`tags=["System Templates"]`) — `app.py:1979-2066`
-`GET /login`, `/set_lang/{lang}`, `/logout`, `/`, `/server/{server_id}`, `/users`, `/my`, `/settings`, `/share/{token}`.
+### Структура пакета `routers/`
 
-### Аутентификация (`tags=["Authentication"]`) — `app.py:2062-2101`
-`GET /api/auth/captcha` (rate-limited), `POST /api/auth/login` (rate-limited).
+| Роутер | Модуль | Описание и конечные точки |
+|---|---|---|
+| **Аутентификация** | [`routers/auth.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/auth.py) | `GET /api/auth/captcha`, `POST /api/auth/login` (rate-limited, капча, сессии). |
+| **Шаблоны** | [`routers/templates.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/templates.py) | HTML-страницы Jinja2 (`/login`, `/set_lang/{lang}`, `/logout`, `/`, `/server/{id}`, `/users`, `/my`). |
+| **Серверы** | [`routers/servers.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/servers.py) | Управление SSH-серверами (`/api/servers/add`, `/edit`, `/ping`, `/reset-fingerprint`, `/reorder`, `/delete`, `/reboot`, `/clear`, `/stats`, `/check`). |
+| **Протоколы** | [`routers/protocols.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/protocols.py) | Установка протоколов (`/install`, `/uninstall`), управление бэкапами, Docker-контейнерами, SOCKS5, Nginx. |
+| **Подключения** | [`routers/connections.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/connections.py) | Управление VPN-клиентами (`/api/servers/{id}/connections/...` — GET, add, remove, edit, config, toggle). |
+| **Пользователи** | [`routers/users.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/users.py) | Пользователи панелей (`/api/users/...` — GET, add, update, delete, toggle, user connections, self-service `/api/my/connections`). |
+| **Шеринг** | [`routers/sharing.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/sharing.py) | Публичные ссылки доступа (`/share/{token}`, `/api/share/{token}/...` — auth, connections, config). |
+| **Настройки** | [`routers/settings.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/settings.py) | Настройки панели (`/settings`, `/api/settings/...`), управление туннелями (cloudflare/ngrok), Cloudflare WARP, Telegram-ботом, синхронизация с Remnawave, бэкап/восстановление `data.json`. |
+| **API-токены** | [`routers/api_tokens.py`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers/api_tokens.py) | Выпуск и аннулирование Bearer-токенов (`/api/settings/tokens/...`). |
 
-### Серверы (`tags=["Servers"]`) — `app.py:2135-2458`
-`/api/servers/add`, `/{server_id}/edit`, `/ping`, `/reset-fingerprint`, `/reorder`, `/{server_id}/delete`, `/reboot`, `/clear`, `/stats`, `/check`.
-
-### Протоколы (`tags=["Protocols"]`) — `app.py:2590-3061`
-`/install`, `/socks5/credentials` (GET+POST), `/uninstall`, `/backups`, `/backups/create`, `/backups/download`, `/container/toggle`, `/server_config`, `/server_config/save`, `/nginx/site`, `/nginx/site/save`.
-
-### Подключения (`tags=["Connections"]`) — `app.py:3084-3291`
-`/api/servers/{server_id}/connections` (GET), `/add`, `/remove`, `/edit`, `/config`, `/toggle`. `GET /api/servers/{server_id}/{protocol}/clients` (`app.py:3953`).
-
-### Пользователи (`tags=["Users"]`) — `app.py:3293-3597`
-`/api/users` (GET), `/add`, `/{user_id}/update`, `/delete`, `/toggle`, `/{user_id}/connections/add`, `/{user_id}/connections` (GET).
-
-### Self-service (`tags=["Self-service"]`) — `app.py:3597, 3682`
-`GET /api/my/connections`, `POST /api/my/connections/{connection_id}/config`.
-
-### Шеринг (публичный, token-protected) (`tags=["Sharing"]`) — `app.py:3652-3723`
-`POST /api/share/{token}/auth`, `GET /api/share/{token}/connections`, `POST /api/share/{token}/config/{connection_id}`. Все rate-limited; CSRF-exempt.
-
-### Настройки (`tags=["Settings"]`) — `app.py:3757-3952, 4027-4068`
-`GET/POST /api/settings`, `/save`, `/tunnels/status`, `/tunnels/{provider}/install|start|stop`, `DELETE /tunnels/{provider}`, `/warp/connect|disconnect`, `/telegram/toggle`, `/sync_now`, `/sync_delete`, `/backup/download`, `/backup/restore`.
-
-### API-токены (`tags=["API Tokens"]`) — `app.py:3985-4067`
-`GET /api/settings/tokens`, `POST`, `DELETE /{token_id}`.
+### Паттерн взаимодействия роутеров и `app.py`
+- Роутеры импортируют `app` как `import app as app_module` для использования общих функций и состояния (`load_data`, `save_data`, `get_ssh`, `_check_admin`, `limiter`, `DATA_LOCK`).
+- `app.py` импортирует роутеры из `routers` и регистрирует их на экземпляр `app`:
+  ```python
+  from routers import auth, templates as templates_router, servers as servers_router, protocols as protocols_router, connections as connections_router, users as users_router, sharing as sharing_router, settings as settings_router, api_tokens as api_tokens_router
+  app.include_router(auth.router)
+  ...
+  ```
+- Для сохранения полного контракта вызовов `app.py` объявляет псевдонимы хэндлеров и Pydantic-моделей:
+  ```python
+  LoginRequest = auth.LoginRequest
+  api_login = auth.api_login
+  ```
 
 Порядок тегов OpenAPI кураторски задан в `OPENAPI_TAGS` (`app.py:68-79`) и драйвит `/docs` и `/redoc`.
+
 
 ## 10. Telegram-бот (`telegram_bot.py`, 1137 строк)
 
@@ -485,13 +484,31 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 ---
 
+## 14. Стандарты качества кода и оптимизация работы с LLM-контекстом
+
+### Экономия контекстных токенов
+1. **Точечное чтение кода**: Ни при каких обстоятельствах не читать модули целиком (`app.py`, `telegram_bot.py`, `routers/*.py`). Сначала выполняется `grep_search` по сигнатуре функции, декоратору или текстовому токену, затем `view_file` с точным диапазоном строк (`StartLine`/`EndLine`).
+2. **Использование субагентов для разведки**: Для глубокого анализа незнакомой части кодовой базы или поиска паттернов в внешних библиотеках делегируйте задачу Read-Only субагентам (`research` / `explore`), чтобы не заполнять контекст основной сессии избыточными выводами.
+3. **Использование сжатых инкрементов (`/compact`)**: Перед запуском крупных архитектурных фаз или планированием новых фич вызывайте `/compact` для очистки истории инструментальных вызовов.
+
+### Стандарты кодовой базы и расширения
+1. **Модульность роутинга**: Все новые конечные точки API распределяются по соответствующим модулям в `routers/*.py` (или создаются новые роутеры в `routers/`), а в `app.py` регистрируются через `app.include_router(...)`.
+2. **Сохранение обратной совместимости**: Любые рефакторинги не должны ломать импорты вид `from app import ...`. При переносе типов или функций из `app.py` в модули обязательно добавляйте алиас-экспорт в `app.py`.
+3. **Безопасность SSH и команд**: Все shell-аргументы и пути от пользователей перед подстановкой в SSH-команды обрабатываются через `shlex.quote()` и доменные валидаторы (например, `nginx_manager._validate_domain`).
+4. **Контроль тестов**: Каждое изменение в обязательном порядке подтверждается выполнением `venv/bin/python -m pytest`. Поломка тестов недопустима.
+
+---
+
 ## Быстрые якоря (file:line)
 
-- Конструкция app: `app.py:81-88`. Порядок middleware: `app.py:104-124`. Lifespan: `app.py:4114-4145`. `uvicorn.run`: `app.py:4186`.
-- Слой данных: `load_data` `app.py:195`, `save_data` `app.py:224`, `save_data_async` `app.py:229`, `get_ssh` `app.py:235`.
-- Auth: `_check_admin` `app.py:2106`, `get_current_user` `app.py:1427`, login `app.py:2080`, `hash_password`/`verify_password` `app.py:1122`/`1124`.
-- API-токены: `app.py:1063-1120`, роут создания `app.py:4009-4051`.
-- Реестр протоколов: `BASE_PROTOCOLS` `app.py:902`, `get_protocol_manager` `app.py:978`, `_manager_call` `app.py:1050`, `ensure_docker_installed` `app.py:1006`.
+- Конструкция app и alias `sys.modules['app']`: `app.py:81-115`. Порядок middleware: `app.py:125-145`. Монтирование роутеров: `app.py:2020-2035`. Lifespan: `app.py:2155-2185`. `uvicorn.run`: `app.py:2188-2233`.
+
+- Слой данных: `load_data` `app.py:216`, `save_data` `app.py:245`, `save_data_async` `app.py:250`, `get_ssh` `app.py:256`.
+- Auth & Security: `_check_admin` `app.py:1105`, `get_current_user` `app.py:1427`, `hash_password`/`verify_password` `app.py:1122`/`1124`.
+- Роутеры API: [`routers/`](file:///home/ozzy/Документы/Amnezia_My_Panel/routers) (`auth.py`, `templates.py`, `servers.py`, `protocols.py`, `connections.py`, `users.py`, `sharing.py`, `settings.py`, `api_tokens.py`).
+- API-токены: `routers/api_tokens.py`, генерация/хэш `app.py:1063-1120`.
+- Реестр протоколов: `BASE_PROTOCOLS` `app.py:902`, `get_protocol_manager` `app.py:999`, `_manager_call` `app.py:1050`.
 - Секреты: `managers/secrets.py`. SSH: `managers/ssh_manager.py`.
-- Туннели: `TUNNEL_RUNTIMES` `app.py:155`, `start_tunnel` `app.py:745`, `stop_tunnel` `app.py:788`.
+- Туннели: `TUNNEL_RUNTIMES` `app.py:155`, `start_tunnel` `app.py:766`, `stop_tunnel` `app.py:809`.
 - Telegram: `launch_bot` `telegram_bot.py:38`, `stop_bot` `telegram_bot.py:47`, `_run_bot` `telegram_bot.py:1004`.
+

@@ -196,7 +196,7 @@
             const qrContainer = document.getElementById('qrcode');
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, {
-                text: data.config,
+                text: data.qr_content || data.vpn_link || data.config,
                 width: 256,
                 height: 256,
                 colorDark: "#000000",

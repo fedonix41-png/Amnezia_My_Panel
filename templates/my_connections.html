@@ -128,7 +128,7 @@
 
                 switchConfigTab('conf');
                 openModal('configModal');
-                generateQR(result.config);
+                generateQR(result.qr_content || result.vpn_link);
             }
         } catch (err) {
             showToast(`${_('error')}: ` + err.message, 'error');

@@ -159,7 +159,16 @@ def _build_wg_json(
     config_map: dict[str, str],
     raw_config: str,
 ) -> dict | None:
-    """Build the Amnezia native JSON for a WireGuard or AWG config."""
+    """Build the Amnezia native JSON for a WireGuard or AWG config.
+
+    Structure matches the working PHP QrUtil::buildOldEnvelopeFromConf():
+    - AWG obfuscation params (H1-H4, Jc, Jmin, Jmax, S1, S2) are placed
+      BOTH at the top level of the protocol section AND inside last_config.
+    - last_config always includes clientId / client_pub_key (empty string
+      when not derivable).
+    - isThirdPartyConfig is NOT set -- the PHP reference project omits it.
+    - last_config is pretty-printed JSON (indent=4) matching PHP behaviour.
+    """
     is_awg = _AWG_REQUIRED_JUNK.issubset(config_map)
     proto_key = "awg" if is_awg else "wireguard"
     container = f"amnezia-{proto_key}"
@@ -169,37 +178,56 @@ def _build_wg_json(
     allowed_ips_raw = config_map.get("AllowedIPs", "0.0.0.0/0, ::/0")
     allowed_ips = [ip.strip() for ip in allowed_ips_raw.split(",") if ip.strip()]
 
-    last_config: dict = {
+    # All AWG junk fields -- always emitted (empty string when absent), like PHP
+    _LC_AWG = ("H1", "H2", "H3", "H4", "I1", "I2", "I3", "I4", "I5",
+               "Jc", "Jmax", "Jmin", "S1", "S2", "S3", "S4")
+
+    last_config: dict = {}
+    for f in _LC_AWG:
+        last_config[f] = config_map.get(f, "")
+
+    last_config.update({
+        "allowed_ips": allowed_ips,
+        "clientId": "",
+        "client_ip": config_map.get("Address", ""),
+        "client_priv_key": config_map.get("PrivateKey", ""),
+        "client_pub_key": "",
         "config": raw_config.strip(),
         "hostName": host_name,
-        "port": port,
-        "client_priv_key": config_map.get("PrivateKey", ""),
-        "client_ip": config_map.get("Address", ""),
-        "psk_key": config_map.get("PresharedKey", ""),
-        "server_pub_key": config_map.get("PublicKey", ""),
         "mtu": config_map.get("MTU", _DEFAULT_MTU),
         "persistent_keep_alive": config_map.get("PersistentKeepalive", _DEFAULT_KEEPALIVE),
-        "allowed_ips": allowed_ips,
-    }
-    for field in _AWG_JUNK_FIELDS:
-        val = config_map.get(field)
-        if val is not None:
-            last_config[field] = val
+        "port": port,
+        "psk_key": config_map.get("PresharedKey", ""),
+        "server_pub_key": config_map.get("PublicKey", ""),
+    })
 
+    # PHP puts these AWG params at the TOP level of the proto section too
     proto_section: dict = {
-        "last_config": json.dumps(last_config, separators=(",", ":")),
-        "isThirdPartyConfig": True,
+        "H1": config_map.get("H1", ""),
+        "H2": config_map.get("H2", ""),
+        "H3": config_map.get("H3", ""),
+        "H4": config_map.get("H4", ""),
+        "Jc": config_map.get("Jc", ""),
+        "Jmax": config_map.get("Jmax", ""),
+        "Jmin": config_map.get("Jmin", ""),
+        "S1": config_map.get("S1", ""),
+        "S2": config_map.get("S2", ""),
+        "last_config": json.dumps(last_config, ensure_ascii=False,
+                                  indent=4, separators=(",", ": ")),
         "port": str(port),
         "transport_proto": "udp",
     }
+
     protocol_version = _detect_awg_version(config_map) if is_awg else None
     if protocol_version is not None:
         proto_section["protocol_version"] = protocol_version
+        for f in ("I1", "I2", "I3", "I4", "I5", "S3", "S4"):
+            proto_section[f] = config_map.get(f, "")
 
     dns1, dns2 = _extract_dns(config_map, raw_config)
 
-    container_entry: dict = {"container": container}
-    container_entry[proto_key] = proto_section
+    # PHP: protocol key comes BEFORE 'container' in the dict
+    container_entry: dict = {proto_key: proto_section, "container": container}
 
     return {
         "containers": [container_entry],
@@ -254,14 +282,18 @@ def _build_xray_json(parsed: dict[str, str]) -> dict:
 
     return {
         "containers": [{
-            "container": "amnezia-xray",
             "xray": {
-                "last_config": json.dumps(client_json, separators=(",", ":")),
-                "isThirdPartyConfig": True,
+                "last_config": json.dumps(client_json, ensure_ascii=False,
+                                          indent=4, separators=(",", ": ")),
+                "port": str(port),
+                "transport_proto": "tcp",
             },
+            "container": "amnezia-xray",
         }],
         "defaultContainer": "amnezia-xray",
         "description": _DESCRIPTION,
+        "dns1": _DEFAULT_DNS1,
+        "dns2": _DEFAULT_DNS2,
         "hostName": parsed["host"],
     }
 
@@ -296,31 +328,38 @@ def build_amnezia_config(
 def generate_qr_content(
     config_text: str, protocol_hint: str | None = None
 ) -> str:
-    """QR code content = ``vpn://`` + ``base64url(qt_compress(JSON))``.
-
-    The AmneziaVPN client's QR scanner sends scanned text through
-    ``extractConfigFromData``, which requires the ``vpn://`` prefix before it
-    attempts base64-decode + qUncompress.  Without the prefix the config is
-    rejected as ``Invalid`` format and never decompressed.
-
-    Returns ``''`` if the config format is not recognised (the frontend
-    falls back to raw config text in that case).
+    """QR code content for Amnezia client scanner.
+    
+    The Amnezia scanner expects Qt QDataStream serialization:
+    Version magic (0x07C00200) + QByteArray(qCompress(JSON)).
+    It does not expect the ``vpn://`` prefix.
     """
     config = build_amnezia_config(config_text, protocol_hint)
     if not config:
         return ""
-    raw = json.dumps(config, separators=(",", ":")).encode("utf-8")
-    encoded = base64url_encode(qt_compress(raw))
-    return f"vpn://{encoded}"
+    
+    raw = json.dumps(config, ensure_ascii=False, indent=4, separators=(",", ": ")).encode("utf-8")
+    compressed = qt_compress(raw)
+    
+    version = 0x07C00200
+    length = len(compressed)
+    # Pack version (uint32) and QByteArray length (uint32)
+    envelope = struct.pack(">II", version, length) + compressed
+    return base64url_encode(envelope)
 
 
 def generate_vpn_link(
     config_text: str, protocol_hint: str | None = None
 ) -> str:
-    """``vpn://`` link — identical to QR content.
-
-    Both the QR code and the text link use the same ``vpn://`` prefixed
-    encoding; the AmneziaVPN client processes them through the same
-    ``extractConfigFromData`` path.
+    """``vpn://`` text link.
+    
+    Used when clicking a shareable link. The app parses it differently
+    than the QR scanner and expects ``vpn://`` + base64url(qCompress(JSON)).
     """
-    return generate_qr_content(config_text, protocol_hint)
+    config = build_amnezia_config(config_text, protocol_hint)
+    if not config:
+        return ""
+    
+    raw = json.dumps(config, ensure_ascii=False, indent=4, separators=(",", ": ")).encode("utf-8")
+    encoded = base64url_encode(qt_compress(raw))
+    return f"vpn://{encoded}"

@@ -1636,9 +1636,19 @@ a:hover {
     padding: var(--space-lg);
 }
 
-.qr-container canvas {
+/* White background is mandatory -- dark UI eats the QR quiet zone */
+#qrCode,
+#qrcode {
+    background: #ffffff;
+    padding: 12px;
     border-radius: var(--radius-md);
-    box-shadow: 0 0 30px rgba(139, 92, 246, 0.15);
+    display: inline-block;
+}
+
+.qr-container canvas,
+.qr-container img {
+    border-radius: 4px;
+    display: block;
 }
 
 .qr-hint {

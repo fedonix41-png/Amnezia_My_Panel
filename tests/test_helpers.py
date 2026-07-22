@@ -44,17 +44,41 @@ class TestPasswordHashing:
 
 
 class TestVpnLinkEncoding:
-    def test_link_is_base64_with_scheme(self):
-        link = generate_vpn_link("[Interface]\nPrivateKey=xxx")
-        assert link.startswith("vpn://")
+    def test_link_is_vpn_scheme_with_valid_config(self):
+        # A minimal but valid WireGuard config (has PrivateKey + Address + PublicKey)
+        wg_conf = (
+            "[Interface]\nPrivateKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+            "Address=10.0.0.2/32\n[Peer]\nPublicKey=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\n"
+            "AllowedIPs=0.0.0.0/0"
+        )
+        link = generate_vpn_link(wg_conf)
+        assert link.startswith("vpn://"), "Valid WG config must produce a vpn:// link"
+        # Must be decodable base64url and contain the native JSON structure
+        import base64 as _b64, struct, zlib, json as _json
         body = link[len("vpn://"):]
-        # Round-trips to the stripped original.
-        decoded = base64.b64decode(body).decode("utf-8")
-        assert decoded == "[Interface]\nPrivateKey=xxx"
+        padded = body + "=" * (-len(body) % 4)
+        compressed = _b64.urlsafe_b64decode(padded)
+        raw_len = struct.unpack(">I", compressed[:4])[0]
+        data = zlib.decompress(compressed[4:])
+        assert len(data) == raw_len
+        parsed = _json.loads(data)
+        assert "containers" in parsed
+        assert parsed["defaultContainer"] in ("amnezia-wireguard", "amnezia-awg")
+
+    def test_link_empty_for_incomplete_config(self):
+        # Missing Address and PublicKey — Amnezia client would reject this too.
+        assert generate_vpn_link("[Interface]\nPrivateKey=xxx") == ""
 
     def test_link_strips_surrounding_whitespace(self):
-        a = generate_vpn_link("payload")
-        b = generate_vpn_link("  payload\n")
+        # Two syntactically equivalent payloads that only differ in surrounding
+        # whitespace must produce the same link (or both empty).
+        wg_conf = (
+            "[Interface]\nPrivateKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n"
+            "Address=10.0.0.2/32\n[Peer]\nPublicKey=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\n"
+            "AllowedIPs=0.0.0.0/0"
+        )
+        a = generate_vpn_link(wg_conf)
+        b = generate_vpn_link("  " + wg_conf + "\n")
         assert a == b
 
 

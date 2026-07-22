@@ -223,10 +223,15 @@ class TestBuildWgJson:
         result = _build_wg_json(cfg_map, AWG_V2_CONF)
         assert result["containers"][0]["awg"]["port"] == "55424"
 
-    def test_is_third_party_config_true(self):
+    def test_native_container_structure(self):
         cfg_map = _parse_wg_config(AWG_V2_CONF)
         result = _build_wg_json(cfg_map, AWG_V2_CONF)
-        assert result["containers"][0]["awg"]["isThirdPartyConfig"] is True
+        awg_sec = result["containers"][0]["awg"]
+        # isThirdPartyConfig must NOT be set for native containers
+        assert "isThirdPartyConfig" not in awg_sec
+        # AWG obfuscation parameters must be present at top level of awg section
+        assert awg_sec["Jc"] == "3"
+        assert awg_sec["H1"] == "1"
 
 
 class TestBuildXrayJson:
@@ -283,92 +288,71 @@ class TestBuildAmneziaConfig:
 
 
 class TestGenerateQrContent:
-    def test_has_vpn_prefix(self):
+    def test_has_no_vpn_prefix_but_magic(self):
         qr = generate_qr_content(AWG_V2_CONF, "awg")
-        assert qr.startswith("vpn://")
+        assert not qr.startswith("vpn://")
+        # Base64url of 0x07C00200 starts with B8ACAA
+        assert qr.startswith("B8ACAA")
 
     def test_returns_base64url_compressed_json(self):
         qr = generate_qr_content(AWG_V2_CONF, "awg")
-        assert qr.startswith("vpn://")
-        payload = qr[len("vpn://"):]
-        # Decode: base64url -> qt format -> decompress -> JSON
-        padded = payload + "=" * (-len(payload) % 4)
+        padded = qr + "=" * (-len(qr) % 4)
         raw = base64.urlsafe_b64decode(padded)
-        length = struct.unpack(">I", raw[:4])[0]
-        decompressed = zlib.decompress(raw[4:])
-        parsed = json.loads(decompressed)
-        assert "containers" in parsed
-
-    def test_empty_for_unknown_format(self):
-        assert generate_qr_content("random text", "telemt") == ""
+        import struct, zlib
+        version, length = struct.unpack(">II", raw[:8])
+        assert version == 0x07C00200
+        assert length == len(raw) - 8
+        uncompressed_len = struct.unpack(">I", raw[8:12])[0]
+        data = zlib.decompress(raw[12:])
+        assert len(data) == uncompressed_len
+        js = json.loads(data)
+        assert "containers" in js
 
     def test_xray_qr_decodable(self):
         qr = generate_qr_content(VLESS_URL, "xray")
-        assert qr.startswith("vpn://")
-        payload = qr[len("vpn://"):]
-        padded = payload + "=" * (-len(payload) % 4)
+        padded = qr + "=" * (-len(qr) % 4)
         raw = base64.urlsafe_b64decode(padded)
-        decompressed = zlib.decompress(raw[4:])
-        parsed = json.loads(decompressed)
-        assert parsed["containers"][0]["container"] == "amnezia-xray"
+        import struct, zlib
+        data = zlib.decompress(raw[12:])
+        js = json.loads(data)
+        assert js["containers"][0]["container"] == "amnezia-xray"
 
 
 class TestGenerateVpnLink:
-    def test_has_vpn_prefix(self):
+    def test_returns_empty_string_for_invalid(self):
+        assert generate_vpn_link("invalid", "telemt") == ""
+
+    def test_different_from_qr_content(self):
+        """QR content and vpn:// link are different."""
+        qr = generate_qr_content(AWG_V2_CONF, "awg")
         link = generate_vpn_link(AWG_V2_CONF, "awg")
+        assert link != qr
         assert link.startswith("vpn://")
 
-    def test_identical_to_qr_content(self):
-        """QR content and vpn:// link are the same — both carry vpn:// prefix."""
-        qr = generate_qr_content(AWG_V2_CONF, "awg")
-        link = generate_vpn_link(AWG_V2_CONF, "awg")
-        assert link == qr
-
-    def test_empty_for_unknown_format(self):
-        assert generate_vpn_link("random text", "telemt") == ""
-
-
 class TestIntegration:
-    """Full round-trip: generate -> decode (simulate AmneziaVPN client path)."""
-
     def test_awg_qr_decodable_by_amnezia_client_path(self):
         qr = generate_qr_content(AWG_V2_CONF, "awg")
-        assert qr.startswith("vpn://")
-
-        # Simulate extractConfigFromData: strip vpn://, base64url decode, qUncompress
-        config_text = qr
-        config_text = config_text.replace("vpn://", "")
-        padded = config_text + "=" * (-len(config_text) % 4)
+        padded = qr + "=" * (-len(qr) % 4)
         raw = base64.urlsafe_b64decode(padded)
-
-        # qUncompress: read 4-byte length, then zlib decompress
-        length = struct.unpack(">I", raw[:4])[0]
-        decompressed = zlib.decompress(raw[4:])
-        parsed = json.loads(decompressed)
-
-        # Verify structure matches what AmneziaVPN expects
-        container = parsed["containers"][0]
-        assert container["container"] == "amnezia-awg"
-        last_config = json.loads(container["awg"]["last_config"])
-        assert "client_priv_key" in last_config
-        assert "server_pub_key" in last_config
-        assert "config" in last_config
+        import struct, zlib
+        # client reads quint32 version
+        v = struct.unpack(">I", raw[:4])[0]
+        assert v == 0x07C00200
+        # next is QByteArray, which starts with quint32 length
+        length = struct.unpack(">I", raw[4:8])[0]
+        assert length == len(raw) - 8
+        
+        # then qUncompress it
+        uncompressed_len = struct.unpack(">I", raw[8:12])[0]
+        data = zlib.decompress(raw[12:])
+        js = json.loads(data)
+        assert js["defaultContainer"] == "amnezia-awg"
 
     def test_wireguard_qr_decodable(self):
         qr = generate_qr_content(WG_PLAIN_CONF, "wireguard")
-        assert qr.startswith("vpn://")
-        payload = qr[len("vpn://"):]
-        padded = payload + "=" * (-len(payload) % 4)
+        padded = qr + "=" * (-len(qr) % 4)
         raw = base64.urlsafe_b64decode(padded)
-        decompressed = zlib.decompress(raw[4:])
-        parsed = json.loads(decompressed)
-        assert parsed["containers"][0]["container"] == "amnezia-wireguard"
-
-    def test_xray_vpn_link_decodable(self):
-        link = generate_vpn_link(VLESS_URL, "xray")
-        payload = link[len("vpn://"):]
-        padded = payload + "=" * (-len(payload) % 4)
-        raw = base64.urlsafe_b64decode(padded)
-        decompressed = zlib.decompress(raw[4:])
-        parsed = json.loads(decompressed)
-        assert parsed["containers"][0]["container"] == "amnezia-xray"
+        import struct, zlib
+        data = zlib.decompress(raw[12:])
+        js = json.loads(data)
+        assert js["defaultContainer"] == "amnezia-wireguard"

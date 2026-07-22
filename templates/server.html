@@ -2119,7 +2119,7 @@
                     document.querySelectorAll('.config-tab')[1].style.display = (proto === 'telemt' ? 'none' : '');
                     switchConfigTab('conf');
                     openModal('configModal');
-                    generateQR(result.config);
+                    generateQR(result.qr_content || result.vpn_link);
                 }
             }
             loadConnections();
@@ -2230,7 +2230,7 @@
                 document.getElementById('vpnLinkText').textContent = currentVpnLink;
                 switchConfigTab('conf');
                 openModal('configModal');
-                generateQR(result.config);
+                generateQR(result.qr_content || result.vpn_link);
             }
         } catch (err) {
             showToast(_('error') + ': ' + err.message, 'error');
