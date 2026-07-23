@@ -6,6 +6,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import app as app_module
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from database.session import get_db
+from database import models
 
 router = APIRouter(tags=["Connections"])
 
@@ -45,34 +51,35 @@ class ToggleConnectionRequest(BaseModel):
 
 
 @router.get('/api/servers/{server_id}/connections')
-async def api_get_connections(request: Request, server_id: int, protocol: str = Query(default='awg')):
+async def api_get_connections(request: Request, server_id: int, protocol: str = Query(default='awg'), db: AsyncSession = Depends(get_db)):
     if not protocol:
         protocol = 'awg'
-    if not app_module._check_admin(request):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, protocol)
         clients = app_module._manager_call(manager, 'get_clients', protocol)
         ssh.disconnect()
 
-        user_conns = data.get('user_connections', [])
-        users = data.get('users', [])
-        users_map = {u['id']: u for u in users}
+        stmt = select(models.Connection).where(
+            models.Connection.server_id == server_id,
+            models.Connection.protocol == protocol
+        ).options(selectinload(models.Connection.user))
+        res = await db.execute(stmt)
+        user_conns = list(res.scalars().all())
+
         for client in clients:
             cid = client.get('clientId', '')
             for uc in user_conns:
-                if uc.get('client_id') == cid and uc.get('server_id') == server_id and uc.get('protocol') == protocol:
-                    uid = uc.get('user_id')
-                    u = users_map.get(uid)
-                    if u:
-                        client['assigned_user'] = u['username']
-                        client['assigned_user_id'] = uid
+                if uc.client_id == cid:
+                    if uc.user:
+                        client['assigned_user'] = uc.user.username
+                        client['assigned_user_id'] = uc.user_id
                     break
         return {'clients': clients}
     except Exception as e:
@@ -81,23 +88,29 @@ async def api_get_connections(request: Request, server_id: int, protocol: str = 
 
 
 @router.post('/api/servers/{server_id}/connections/add')
-async def api_add_connection(request: Request, server_id: int, req: AddConnectionRequest):
-    if not app_module._check_admin(request):
+async def api_add_connection(request: Request, server_id: int, req: AddConnectionRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        proto_info = server.get('protocols', {}).get(req.protocol, {})
-        port = proto_info.get('port', '55424')
-        ssh = app_module.get_ssh(server)
+        
+        stmt_proto = select(models.ServerProtocol).where(
+            models.ServerProtocol.server_id == server_id,
+            models.ServerProtocol.protocol_type == req.protocol
+        )
+        res_proto = await db.execute(stmt_proto)
+        proto_info = res_proto.scalar_one_or_none()
+        port = proto_info.port if proto_info else '55424'
+
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, req.protocol)
         
         if app_module.protocol_base(req.protocol) == 'telemt':
             result = manager.add_client(
-                req.protocol, req.name, server['host'], port,
+                req.protocol, req.name, server.host, port,
                 telemt_quota=req.telemt_quota,
                 telemt_max_ips=req.telemt_max_ips,
                 telemt_expiry=req.telemt_expiry,
@@ -106,9 +119,9 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
                 max_tcp_conns=req.telemt_max_conns
             )
         elif app_module.protocol_base(req.protocol) == 'wireguard':
-            result = manager.add_client(req.name, server['host'])
+            result = manager.add_client(req.name, server.host)
         else:
-            result = manager.add_client(req.protocol, req.name, server['host'], port)
+            result = manager.add_client(req.protocol, req.name, server.host, port)
         ssh.disconnect()
 
         if result.get('config'):
@@ -116,17 +129,15 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
             result['qr_content'] = app_module.generate_qr_content(result['config'])
 
         if req.user_id and result.get('client_id'):
-            conn = {
-                'id': str(uuid.uuid4()),
-                'user_id': req.user_id,
-                'server_id': server_id,
-                'protocol': req.protocol,
-                'client_id': result['client_id'],
-                'name': req.name,
-                'created_at': datetime.now().isoformat(),
-            }
-            data['user_connections'].append(conn)
-            app_module.save_data(data)
+            conn = models.Connection(
+                user_id=req.user_id,
+                server_id=server_id,
+                protocol=req.protocol,
+                client_id=result['client_id'],
+                name=req.name
+            )
+            db.add(conn)
+            await db.commit()
 
         return result
     except Exception as e:
@@ -135,26 +146,30 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
 
 
 @router.post('/api/servers/{server_id}/connections/remove')
-async def api_remove_connection(request: Request, server_id: int, req: ConnectionActionRequest):
-    if not app_module._check_admin(request):
+async def api_remove_connection(request: Request, server_id: int, req: ConnectionActionRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
         if not req.client_id:
             return JSONResponse({'error': 'Client ID is required'}, status_code=400)
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, req.protocol)
         app_module._manager_call(manager, 'remove_client', req.protocol, req.client_id)
         ssh.disconnect()
-        data['user_connections'] = [
-            c for c in data.get('user_connections', [])
-            if not (c.get('client_id') == req.client_id and c.get('server_id') == server_id)
-        ]
-        app_module.save_data(data)
+        
+        stmt = select(models.Connection).where(
+            models.Connection.client_id == req.client_id,
+            models.Connection.server_id == server_id
+        )
+        res = await db.execute(stmt)
+        for c in res.scalars().all():
+            await db.delete(c)
+        await db.commit()
+        
         return {'status': 'success'}
     except Exception as e:
         app_module.logger.exception("Error removing connection")
@@ -162,16 +177,15 @@ async def api_remove_connection(request: Request, server_id: int, req: Connectio
 
 
 @router.post('/api/servers/{server_id}/connections/edit')
-async def api_edit_connection(request: Request, server_id: int, req: EditConnectionRequest):
-    if not app_module._check_admin(request):
+async def api_edit_connection(request: Request, server_id: int, req: EditConnectionRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
         
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, req.protocol)
         
@@ -193,30 +207,39 @@ async def api_edit_connection(request: Request, server_id: int, req: EditConnect
 
 
 @router.post('/api/servers/{server_id}/connections/config')
-async def api_get_connection_config(request: Request, server_id: int, req: ConnectionActionRequest):
-    user = app_module.get_current_user(request)
+async def api_get_connection_config(request: Request, server_id: int, req: ConnectionActionRequest, db: AsyncSession = Depends(get_db)):
+    user = await app_module.get_current_user(db, request)
     if not user:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        if user['role'] == 'user':
-            owned = any(
-                c for c in data.get('user_connections', [])
-                if c.get('client_id') == req.client_id and c.get('server_id') == server_id and c.get('user_id') == user['id']
+        if user.role == 'user':
+            stmt = select(models.Connection).where(
+                models.Connection.client_id == req.client_id,
+                models.Connection.server_id == server_id,
+                models.Connection.user_id == user.id
             )
-            if not owned:
+            res = await db.execute(stmt)
+            if not res.scalar_one_or_none():
                 return JSONResponse({'error': 'Forbidden'}, status_code=403)
-        server = data['servers'][server_id]
+                
         if not req.client_id:
             return JSONResponse({'error': 'Client ID is required'}, status_code=400)
-        proto_info = server.get('protocols', {}).get(req.protocol, {})
-        port = proto_info.get('port', '55424')
-        ssh = app_module.get_ssh(server)
+            
+        stmt_proto = select(models.ServerProtocol).where(
+            models.ServerProtocol.server_id == server_id,
+            models.ServerProtocol.protocol_type == req.protocol
+        )
+        res_proto = await db.execute(stmt_proto)
+        proto_info = res_proto.scalar_one_or_none()
+        port = proto_info.port if proto_info else '55424'
+        
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, req.protocol)
-        config = app_module._manager_call(manager, 'get_client_config', req.protocol, req.client_id, server['host'], port)
+        config = app_module._manager_call(manager, 'get_client_config', req.protocol, req.client_id, server.host, port)
         ssh.disconnect()
         vpn_link = app_module.generate_vpn_link(config) if config else ''
         qr_content = app_module.generate_qr_content(config) if config else ''
@@ -227,17 +250,16 @@ async def api_get_connection_config(request: Request, server_id: int, req: Conne
 
 
 @router.post('/api/servers/{server_id}/connections/toggle')
-async def api_toggle_connection(request: Request, server_id: int, req: ToggleConnectionRequest):
-    if not app_module._check_admin(request):
+async def api_toggle_connection(request: Request, server_id: int, req: ToggleConnectionRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
         if not req.client_id:
             return JSONResponse({'error': 'Client ID is required'}, status_code=400)
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, req.protocol)
         app_module._manager_call(manager, 'toggle_client', req.protocol, req.client_id, req.enable)

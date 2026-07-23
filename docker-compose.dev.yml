@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: amnezia_db_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-amnezia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-amnezia_panel}
+    ports:
+      - "5432:5432"
+    volumes:
+      - amnezia_postgres_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-amnezia}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  amnezia_postgres_dev:

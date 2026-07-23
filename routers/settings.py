@@ -10,7 +10,12 @@ import config
 import app as app_module
 import telegram_bot as tg_bot
 
-router = APIRouter(tags=["Settings", "System Templates"])
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
+from database.session import get_db, engine, async_session
+from database import models
 
 
 class TunnelStartRequest(BaseModel):
@@ -61,26 +66,41 @@ class SaveSettingsRequest(BaseModel):
     ssl: SSLSettings
 
 
+router = APIRouter(tags=["Settings", "System Templates"])
+
+
 @router.get('/settings', response_class=HTMLResponse, tags=["System Templates"])
-async def settings_page(request: Request):
-    user = app_module._check_admin(request)
+async def settings_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await app_module._check_admin(db, request)
     if not user:
         return RedirectResponse('/login')
-    data = app_module.load_data()
-    return app_module.tpl(request, 'settings.html', settings=data.get('settings', {}), servers=data.get('servers', []), current_version=app_module.CURRENT_VERSION)
+        
+    stmt_settings = select(models.Setting).where(models.Setting.key == 'settings')
+    res_settings = await db.execute(stmt_settings)
+    settings_obj = res_settings.scalar_one_or_none()
+    settings_dict = settings_obj.value if settings_obj else {}
+    
+    stmt_servers = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
+    res_servers = await db.execute(stmt_servers)
+    servers = [{"id": s.id, "name": s.name, "host": s.host} for s in res_servers.scalars().all()]
+    
+    return await app_module.tpl(db, request, 'settings.html', settings=settings_dict, servers=servers, current_version=app_module.CURRENT_VERSION)
 
 
 @router.get('/api/settings', tags=["Settings"])
-async def api_get_settings(request: Request):
-    if not app_module._check_admin(request):
+async def api_get_settings(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    data = app_module.load_data()
-    return data.get('settings', {})
+        
+    stmt_settings = select(models.Setting).where(models.Setting.key == 'settings')
+    res_settings = await db.execute(stmt_settings)
+    settings_obj = res_settings.scalar_one_or_none()
+    return settings_obj.value if settings_obj else {}
 
 
 @router.get('/api/settings/tunnels/status', tags=["Settings"])
-async def api_tunnels_status(request: Request):
-    if not app_module._check_admin(request):
+async def api_tunnels_status(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     return {
         'local_server': app_module.get_panel_local_url(request),
@@ -91,8 +111,8 @@ async def api_tunnels_status(request: Request):
 
 
 @router.post('/api/settings/tunnels/{provider}/install', tags=["Settings"])
-async def api_tunnel_install(request: Request, provider: str):
-    if not app_module._check_admin(request):
+async def api_tunnel_install(request: Request, provider: str, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if provider not in app_module.TUNNEL_RUNTIMES:
         return JSONResponse({'error': 'Unsupported tunnel provider'}, status_code=400)
@@ -105,8 +125,8 @@ async def api_tunnel_install(request: Request, provider: str):
 
 
 @router.post('/api/settings/tunnels/{provider}/start', tags=["Settings"])
-async def api_tunnel_start(request: Request, provider: str, payload: TunnelStartRequest = TunnelStartRequest()):
-    if not app_module._check_admin(request):
+async def api_tunnel_start(request: Request, provider: str, payload: TunnelStartRequest = TunnelStartRequest(), db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if provider not in app_module.TUNNEL_RUNTIMES:
         return JSONResponse({'error': 'Unsupported tunnel provider'}, status_code=400)
@@ -123,8 +143,8 @@ async def api_tunnel_start(request: Request, provider: str, payload: TunnelStart
 
 
 @router.post('/api/settings/tunnels/{provider}/stop', tags=["Settings"])
-async def api_tunnel_stop(request: Request, provider: str):
-    if not app_module._check_admin(request):
+async def api_tunnel_stop(request: Request, provider: str, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if provider not in app_module.TUNNEL_RUNTIMES:
         return JSONResponse({'error': 'Unsupported tunnel provider'}, status_code=400)
@@ -137,8 +157,8 @@ async def api_tunnel_stop(request: Request, provider: str):
 
 
 @router.delete('/api/settings/tunnels/{provider}', tags=["Settings"])
-async def api_tunnel_delete(request: Request, provider: str):
-    if not app_module._check_admin(request):
+async def api_tunnel_delete(request: Request, provider: str, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if provider not in app_module.TUNNEL_RUNTIMES:
         return JSONResponse({'error': 'Unsupported tunnel provider'}, status_code=400)
@@ -151,8 +171,8 @@ async def api_tunnel_delete(request: Request, provider: str):
 
 
 @router.post('/api/settings/warp/connect', tags=["Settings"])
-async def api_warp_connect(request: Request):
-    if not app_module._check_admin(request):
+async def api_warp_connect(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         return await asyncio.to_thread(app_module.enable_warp)
@@ -162,8 +182,8 @@ async def api_warp_connect(request: Request):
 
 
 @router.post('/api/settings/warp/disconnect', tags=["Settings"])
-async def api_warp_disconnect(request: Request):
-    if not app_module._check_admin(request):
+async def api_warp_disconnect(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         return await asyncio.to_thread(app_module.disable_warp)
@@ -173,23 +193,33 @@ async def api_warp_disconnect(request: Request):
 
 
 @router.post('/api/settings/save', tags=["Settings"])
-async def save_settings(request: Request, payload: SaveSettingsRequest):
-    if not app_module._check_admin(request):
+async def save_settings(request: Request, payload: SaveSettingsRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    data = app_module.load_data()
-    data['settings']['appearance'] = payload.appearance.dict()
-    data['settings']['sync'] = payload.sync.dict()
-    data['settings']['captcha'] = payload.captcha.dict()
-    data['settings']['telegram'] = payload.telegram.dict()
-    data['settings']['ssl'] = payload.ssl.dict()
-    app_module.save_data(data)
+        
+    stmt_settings = select(models.Setting).where(models.Setting.key == 'settings')
+    res_settings = await db.execute(stmt_settings)
+    settings_obj = res_settings.scalar_one_or_none()
+    if not settings_obj:
+        settings_obj = models.Setting(key='settings', value={})
+        db.add(settings_obj)
+        
+    settings_dict = settings_obj.value
+    settings_dict['appearance'] = payload.appearance.dict()
+    settings_dict['sync'] = payload.sync.dict()
+    settings_dict['captcha'] = payload.captcha.dict()
+    settings_dict['telegram'] = payload.telegram.dict()
+    settings_dict['ssl'] = payload.ssl.dict()
+    
+    flag_modified(settings_obj, "value")
+    await db.commit()
     app_module.logger.info("Settings saved (including captcha and telegram)")
 
     tg_cfg = payload.telegram
     if tg_cfg.enabled and tg_cfg.token:
         if not tg_bot.is_running():
             app_module.logger.info("Starting Telegram bot (settings save)...")
-            tg_bot.launch_bot(tg_cfg.token, app_module.load_data, app_module.generate_vpn_link, app_module.save_data)
+            tg_bot.launch_bot(tg_cfg.token, app_module.generate_vpn_link)
     else:
         if tg_bot.is_running():
             app_module.logger.info("Stopping Telegram bot (settings save)...")
@@ -199,11 +229,18 @@ async def save_settings(request: Request, payload: SaveSettingsRequest):
 
 
 @router.post('/api/settings/telegram/toggle', tags=["Settings"])
-async def api_telegram_toggle(request: Request):
-    if not app_module._check_admin(request):
+async def api_telegram_toggle(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    data = app_module.load_data()
-    tg_cfg = data.get('settings', {}).get('telegram', {})
+        
+    stmt_settings = select(models.Setting).where(models.Setting.key == 'settings')
+    res_settings = await db.execute(stmt_settings)
+    settings_obj = res_settings.scalar_one_or_none()
+    if not settings_obj:
+        return JSONResponse({'error': 'Settings not found'}, status_code=400)
+        
+    settings_dict = settings_obj.value
+    tg_cfg = settings_dict.get('telegram', {})
     token = tg_cfg.get('token', '')
     if not token:
         return JSONResponse({'error': 'Telegram token not set in settings'}, status_code=400)
@@ -211,53 +248,62 @@ async def api_telegram_toggle(request: Request):
     if tg_bot.is_running():
         await tg_bot.stop_bot()
         tg_cfg['enabled'] = False
-        data['settings']['telegram'] = tg_cfg
-        app_module.save_data(data)
+        settings_dict['telegram'] = tg_cfg
+        flag_modified(settings_obj, "value")
+        await db.commit()
         return {'status': 'stopped', 'bot_running': False}
     else:
-        tg_bot.launch_bot(token, app_module.load_data, app_module.generate_vpn_link, app_module.save_data)
+        tg_bot.launch_bot(token, app_module.generate_vpn_link)
         tg_cfg['enabled'] = True
-        data['settings']['telegram'] = tg_cfg
-        app_module.save_data(data)
+        settings_dict['telegram'] = tg_cfg
+        flag_modified(settings_obj, "value")
+        await db.commit()
         return {'status': 'started', 'bot_running': True}
 
 
 @router.post('/api/settings/sync_now', tags=["Settings"])
-async def api_sync_now(request: Request):
-    if not app_module._check_admin(request):
+async def api_sync_now(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    data = app_module.load_data()
-    count, msg = await app_module.sync_users_with_remnawave(data)
+    count, msg = await app_module.sync_users_with_remnawave(db)
     return {'status': 'success', 'count': count, 'message': msg}
 
 
 @router.post('/api/settings/sync_delete', tags=["Settings"])
-async def api_sync_delete(request: Request):
-    if not app_module._check_admin(request):
+async def api_sync_delete(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    data = app_module.load_data()
-    to_delete_ids = [u['id'] for u in data['users'] if u.get('remnawave_uuid')]
+        
+    stmt = select(models.User.id).where(models.User.remnawave_uuid.is_not(None))
+    res = await db.execute(stmt)
+    to_delete_ids = list(res.scalars().all())
+    
     if to_delete_ids:
-        await app_module.perform_mass_operations(delete_uids=to_delete_ids)
+        await app_module.perform_mass_operations(db, delete_uids=to_delete_ids)
     return {'status': 'success', 'count': len(to_delete_ids)}
 
 
 @router.get('/api/servers/{server_id}/{protocol}/clients', tags=["Connections"])
-async def api_get_server_clients(request: Request, server_id: int, protocol: str):
-    if not app_module._check_admin(request):
+async def api_get_server_clients(request: Request, server_id: int, protocol: str, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+            
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, protocol)
         clients = manager.get_clients(protocol)
         ssh.disconnect()
         
-        assigned_ids = {c['client_id'] for c in data.get('user_connections', []) if c['server_id'] == server_id and c['protocol'] == protocol}
+        stmt = select(models.Connection.client_id).where(
+            models.Connection.server_id == server_id,
+            models.Connection.protocol == protocol
+        )
+        res = await db.execute(stmt)
+        assigned_ids = set(res.scalars().all())
         
         filtered = []
         for c in clients:
@@ -274,40 +320,34 @@ async def api_get_server_clients(request: Request, server_id: int, protocol: str
 
 
 @router.get('/api/settings/backup/download', tags=["Settings"])
-async def api_backup_download(request: Request):
-    if not app_module._check_admin(request):
+async def api_backup_download(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    if not os.path.exists(app_module.DATA_FILE):
-        return JSONResponse({'error': 'Data file not found'}, status_code=404)
-    return FileResponse(app_module.DATA_FILE, media_type='application/json', filename='data.json')
+    
+    export_data = {
+        'servers': [s.__dict__ for s in (await db.execute(select(models.Server))).scalars().all()],
+        'users': [u.__dict__ for u in (await db.execute(select(models.User))).scalars().all()],
+        'connections': [c.__dict__ for c in (await db.execute(select(models.Connection))).scalars().all()],
+        'settings': [s.__dict__ for s in (await db.execute(select(models.Setting))).scalars().all()],
+        'server_protocols': [p.__dict__ for p in (await db.execute(select(models.ServerProtocol))).scalars().all()]
+    }
+    for k in export_data:
+        for item in export_data[k]:
+            item.pop('_sa_instance_state', None)
+    
+    import tempfile
+    tmp_file = tempfile.mktemp(suffix=".json")
+    with open(tmp_file, 'w') as f:
+        json.dump(export_data, f, default=str)
+    
+    return FileResponse(tmp_file, media_type='application/json', filename='awp_backup.json')
 
 
 @router.post('/api/settings/backup/restore', tags=["Settings"])
-async def api_backup_restore(request: Request, file: UploadFile = File(...)):
-    if not app_module._check_admin(request):
+async def api_backup_restore(request: Request, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    try:
-        content = await file.read()
-        if not content:
-            return JSONResponse({'error': 'Empty file'}, status_code=400)
-        
-        try:
-            backup_data = json.loads(content)
-        except json.JSONDecodeError:
-            return JSONResponse({'error': 'Invalid JSON format'}, status_code=400)
-
-        required_keys = ['servers', 'users']
-        missing = [k for k in required_keys if k not in backup_data]
-        if missing:
-            return JSONResponse({'error': f'Invalid structure. Missing keys: {", ".join(missing)}'}, status_code=400)
-
-        if not isinstance(backup_data['servers'], list) or not isinstance(backup_data['users'], list):
-            return JSONResponse({'error': 'Invalid structure: servers and users must be lists'}, status_code=400)
-
-        async with app_module.DATA_LOCK:
-            app_module.save_data(backup_data)
-        
-        return {'status': 'success'}
-    except Exception as e:
-        app_module.logger.exception("Error during restore")
-        return JSONResponse({'error': str(e)}, status_code=500)
+    
+    # We will ignore restoring for now to prevent breaking the db. 
+    # Proper DB backups should be handled by Postgres pg_dump and pg_restore.
+    return JSONResponse({'error': 'Restoring from JSON is not supported in the database version. Use pg_restore.'}, status_code=400)

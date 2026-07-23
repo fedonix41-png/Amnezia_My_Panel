@@ -145,7 +145,13 @@ SHARE_RATE_LIMIT = os.environ.get("SHARE_RATE_LIMIT", "10/minute")
 CAPTCHA_RATE_LIMIT = os.environ.get("CAPTCHA_RATE_LIMIT", "30/minute")
 
 # ---------------------------------------------------------------------------
-# Automatic data.json backups
+# Automatic data.json backups (Legacy, to be removed or adapted)
 # ---------------------------------------------------------------------------
 BACKUP_INTERVAL_HOURS = max(0, int(os.environ.get("BACKUP_INTERVAL_HOURS", "6") or 6))
 BACKUP_KEEP_COUNT = max(1, int(os.environ.get("BACKUP_KEEP_COUNT", "14") or 14))
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://amnezia:secure_password@localhost:5432/amnezia_panel")
+

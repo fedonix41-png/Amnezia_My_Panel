@@ -205,69 +205,51 @@ load_translations()
 
 
 # ======================== Helpers ========================
+from database.session import get_db, get_db_context
+from database import models
+from database.crud import get_setting, set_setting
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-# Global lock for data.json access to prevent race conditions during async operations
-DATA_LOCK = asyncio.Lock()
+
+# legacy data functions removed
 
 
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+def get_ssh(server, db: Optional[AsyncSession] = None):
+    if isinstance(server, dict):
+        # Legacy dict mode (mostly for tests or transition)
+        def on_fp(fp):
+            server['host_fingerprint'] = fp
+        return SSHManager(
+            host=server['host'],
+            port=server.get('ssh_port', 22),
+            username=server['username'],
+            password=decrypt_secret(server.get('password')),
+            private_key=decrypt_secret(server.get('private_key')),
+            host_fingerprint=server.get('host_fingerprint'),
+            on_fingerprint=on_fp,
+        )
     else:
-        data = {}
-    data.setdefault('servers', [])
-    data.setdefault('users', [])
-    data.setdefault('user_connections', [])
-    data.setdefault('api_tokens', [])
-    data.setdefault('settings', {
-        'appearance': {
-            'title': 'Amnezia',
-            'logo': '❤️',
-            'subtitle': 'Web Panel'
-        },
-        'sync': {
-            'remnawave_url': '',
-            'remnawave_api_key': '',
-            'remnawave_sync': False,
-            'remnawave_sync_users': False,
-            'remnawave_create_conns': False,
-            'remnawave_server_id': 0,
-            'remnawave_protocol': 'awg'
-        }
-    })
-    return data
+        # ORM model mode
+        def on_fp(fp):
+            server.host_fingerprint = fp
+            # We don't commit here because callers typically commit after mutating,
+            # or it's just a read-only endpoint that updates the DB state in passing.
+            if db:
+                db.add(server)
+        return SSHManager(
+            host=server.host,
+            port=server.ssh_port or 22,
+            username=server.username,
+            password=decrypt_secret(server.password),
+            private_key=decrypt_secret(server.private_key),
+            host_fingerprint=server.host_fingerprint,
+            on_fingerprint=on_fp,
+        )
 
 
-def save_data(data):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-async def save_data_async(data):
-    """Saves data to file in a thread-safe way."""
-    async with DATA_LOCK:
-        await asyncio.to_thread(save_data, data)
-
-
-def get_ssh(server):
-    return SSHManager(
-        host=server['host'],
-        port=server.get('ssh_port', 22),
-        username=server['username'],
-        password=decrypt_secret(server.get('password')),
-        private_key=decrypt_secret(server.get('private_key')),
-        host_fingerprint=server.get('host_fingerprint'),
-        # Mutate the server dict in-place when a fingerprint is first observed
-        # (or after a legit reset). It is persisted by the caller's save_data();
-        # read-only endpoints that don't save simply re-pin on the next write.
-        on_fingerprint=lambda fp: server.__setitem__('host_fingerprint', fp),
-    )
-
-
-def get_panel_local_url(request: Optional[Request] = None):
-    data = load_data()
-    ssl_conf = data.get('settings', {}).get('ssl', {})
+async def get_panel_local_url(db: AsyncSession, request: Optional[Request] = None):
+    ssl_conf = await get_setting(db, 'ssl', {})
     scheme = 'https' if ssl_conf.get('enabled') else 'http'
     host = '127.0.0.1'
     port = ssl_conf.get('panel_port', 5000) or 5000
@@ -278,9 +260,8 @@ def get_panel_local_url(request: Optional[Request] = None):
     return f"{scheme}://{host}:{port}"
 
 
-def get_panel_tunnel_target_url():
-    data = load_data()
-    ssl_conf = data.get('settings', {}).get('ssl', {})
+async def get_panel_tunnel_target_url(db: AsyncSession):
+    ssl_conf = await get_setting(db, 'ssl', {})
     scheme = 'https' if ssl_conf.get('enabled') else 'http'
     port = ssl_conf.get('panel_port', 5000) or 5000
     return f"{scheme}://127.0.0.1:{port}"
@@ -1207,38 +1188,39 @@ async def perform_toggle_user(data: dict, user_id: str, enable: bool) -> bool:
     return True
 
 
-async def perform_mass_operations(delete_uids: List[str] = None, toggle_uids: List[tuple] = None, create_conns: List[dict] = None):
-    """
-    Executes multiple SSH operations efficiently.
-    Reloads data inside to ensure we don't overwrite other changes.
-    """
-    data = load_data()
-    server_ops = {}
+async def perform_mass_operations(db, delete_uids: List[str] = None, toggle_uids: List[tuple] = None, create_conns: List[dict] = None):
+    """Executes multiple SSH operations efficiently."""
+    from database import models
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
+    server_ops = {}
     def get_ops(sid):
         if sid not in server_ops:
             server_ops[sid] = {'delete': [], 'toggle': [], 'create': []}
         return server_ops[sid]
 
+    # Collect operations
     if delete_uids:
-        for uid in delete_uids:
-            conns = [c for c in data.get('user_connections', []) if c['user_id'] == uid]
-            for c in conns: get_ops(c['server_id'])['delete'].append(c)
-    
+        stmt = select(models.UserConnection).where(models.UserConnection.user_id.in_(delete_uids))
+        res = await db.execute(stmt)
+        for c in res.scalars().all():
+            get_ops(c.server_id)['delete'].append(c)
+
     if toggle_uids:
         for uid, enabled in toggle_uids:
-            conns = [c for c in data.get('user_connections', []) if c['user_id'] == uid]
-            for c in conns: get_ops(c['server_id'])['toggle'].append((c, enabled))
+            stmt = select(models.UserConnection).where(models.UserConnection.user_id == uid)
+            res = await db.execute(stmt)
+            for c in res.scalars().all():
+                get_ops(c.server_id)['toggle'].append((c, enabled))
 
     if create_conns:
-        for req in create_conns: get_ops(req['server_id'])['create'].append(req)
+        for req in create_conns:
+            get_ops(req['server_id'])['create'].append(req)
 
     async def run_server_ops(srv_id, ops):
-        # We re-load data inside to be absolutely sure about current state
-        # but for performance we'll use the passed srv_id
-        current_data = load_data()
-        if srv_id >= len(current_data['servers']): return
-        srv = current_data['servers'][srv_id]
+        srv = await db.get(models.Server, srv_id)
+        if not srv: return
         
         try:
             ssh = get_ssh(srv)
@@ -1246,78 +1228,78 @@ async def perform_mass_operations(delete_uids: List[str] = None, toggle_uids: Li
             
             # 1. Deletes
             for c in ops['delete']:
-                manager = get_protocol_manager(ssh, c['protocol'])
-                await asyncio.to_thread(_manager_call, manager, 'remove_client', c['protocol'], c['client_id'])
-                # Incremental delete from data
-                async with DATA_LOCK:
-                    current_data = load_data()
-                    current_data['user_connections'] = [conn for conn in current_data['user_connections'] if conn['id'] != c['id']]
-                    save_data(current_data)
+                manager = get_protocol_manager(ssh, c.protocol)
+                await asyncio.to_thread(_manager_call, manager, 'remove_client', c.protocol, c.client_id)
+                await db.delete(c)
+                await db.commit()
             
             # 2. Toggles
             for c, enabled in ops['toggle']:
-                manager = get_protocol_manager(ssh, c['protocol'])
-                await asyncio.to_thread(_manager_call, manager, 'toggle_client', c['protocol'], c['client_id'], enabled)
-                # Incremental toggle in data
-                async with DATA_LOCK:
-                    current_data = load_data()
-                    # We also need to update user status if it was a user toggle
-                    # Wait, mass ops caller usually handles user enabled status. 
-                    # Here we just toggle the actual wireguard peer.
-                    save_data(current_data)
+                manager = get_protocol_manager(ssh, c.protocol)
+                await asyncio.to_thread(_manager_call, manager, 'toggle_client', c.protocol, c.client_id, enabled)
             
             # 3. Creates
             for c_req in ops['create']:
-                proto_info = srv.get('protocols', {}).get(c_req['protocol'], {})
-                port = proto_info.get('port', '55424')
+                stmt = select(models.ServerProtocol).where(models.ServerProtocol.server_id == srv_id, models.ServerProtocol.protocol_type == c_req['protocol'])
+                res = await db.execute(stmt)
+                proto_record = res.scalars().first()
+                port = proto_record.port if proto_record and proto_record.port else 55424
+                
                 manager = get_protocol_manager(ssh, c_req['protocol'])
-                
                 if c_req['protocol'] == 'wireguard':
-                    res = await asyncio.to_thread(manager.add_client, c_req['name'], srv['host'])
+                    res_add = await asyncio.to_thread(manager.add_client, c_req['name'], srv.host)
                 else:
-                    res = await asyncio.to_thread(_manager_call, manager, 'add_client', c_req['protocol'], c_req['name'], srv['host'], port)
+                    res_add = await asyncio.to_thread(_manager_call, manager, 'add_client', c_req['protocol'], c_req['name'], srv.host, port)
                 
-                if res.get('client_id'):
-                    new_conn = {
-                        'id': str(uuid.uuid4()),
-                        'user_id': c_req['user_id'],
-                        'server_id': srv_id,
-                        'protocol': c_req['protocol'],
-                        'client_id': res['client_id'],
-                        'name': c_req['name'],
-                        'created_at': datetime.now().isoformat(),
-                    }
-                    async with DATA_LOCK:
-                        current_data = load_data()
-                        current_data['user_connections'].append(new_conn)
-                        save_data(current_data)
+                if res_add.get('client_id'):
+                    new_conn = models.UserConnection(
+                        id=str(uuid.uuid4()),
+                        user_id=c_req['user_id'],
+                        server_id=srv_id,
+                        protocol=c_req['protocol'],
+                        client_id=res_add['client_id'],
+                        name=c_req['name'],
+                        created_at=datetime.now(),
+                    )
+                    db.add(new_conn)
+                    await db.commit()
             
             await asyncio.to_thread(ssh.disconnect)
         except Exception as e:
             logger.error(f"Mass ops failed for server {srv_id}: {e}")
 
-    # Run all servers in parallel
     tasks = [run_server_ops(sid, ops) for sid, ops in server_ops.items()]
     if tasks:
         await asyncio.gather(*tasks)
 
-    # 4. Final user-level cleanup (delete/toggle users metadata)
-    async with DATA_LOCK:
-        current_data = load_data()
-        if delete_uids:
-            current_data['users'] = [u for u in current_data['users'] if u['id'] not in delete_uids]
-            current_data['user_connections'] = [c for c in current_data.get('user_connections', []) if c['user_id'] not in delete_uids]
-        if toggle_uids:
-            for uid, enabled in toggle_uids:
-                user = next((u for u in current_data['users'] if u['id'] == uid), None)
-                if user: user['enabled'] = enabled
-        save_data(current_data)
+    # Final user-level cleanup
+    if delete_uids:
+        stmt = select(models.User).where(models.User.id.in_(delete_uids))
+        res = await db.execute(stmt)
+        for u in res.scalars().all():
+            await db.delete(u)
+        await db.commit()
+
+    if toggle_uids:
+        for uid, enabled in toggle_uids:
+            u = await db.get(models.User, uid)
+            if u:
+                u.enabled = enabled
+        await db.commit()
 
     return True
 
-
-async def sync_users_with_remnawave(data: dict):
-    settings = data.get('settings', {}).get('sync', {})
+async def sync_users_with_remnawave(db):
+    from database import models
+    from sqlalchemy import select
+    
+    settings = {}
+    stmt = select(models.Setting).where(models.Setting.key == 'settings')
+    res = await db.execute(stmt)
+    setting_obj = res.scalars().first()
+    if setting_obj and setting_obj.value:
+        settings = setting_obj.value.get('sync', {})
+        
     if not settings.get('remnawave_sync_users'):
         return 0, "Synchronization is disabled in settings"
     
@@ -1332,7 +1314,7 @@ async def sync_users_with_remnawave(data: dict):
     try:
         rw_users = []
         async with httpx.AsyncClient(timeout=30.0) as client:
-            page_size = 50  # Use a smaller page size that is more likely to be accepted
+            page_size = 50
             current_start = 0
             while True:
                 resp = await client.get(f"{api_url}?size={page_size}&start={current_start}", headers=headers)
@@ -1344,84 +1326,74 @@ async def sync_users_with_remnawave(data: dict):
                 page_users = response_obj.get('users', [])
                 total_count = response_obj.get('total', 0)
                 
-                if not page_users:
-                    break
+                if not page_users: break
                 
                 rw_users.extend(page_users)
-                logger.info(f"Fetched {len(rw_users)} / {total_count} users from Remnawave...")
-                
-                if len(rw_users) >= total_count or len(page_users) == 0:
-                    break
-                    
+                if len(rw_users) >= total_count or len(page_users) == 0: break
                 current_start += len(page_users)
 
             rw_uuids = {u['uuid'] for u in rw_users}
             
-            # 1. Handle deletion (users that have remnawave_uuid but are no longer in Remnawave)
+            stmt = select(models.User)
+            res = await db.execute(stmt)
+            all_users = res.scalars().all()
+            
+            # 1. Handle deletion
             to_delete_ids = []
-            for u in data['users']:
-                if u.get('remnawave_uuid') and u['remnawave_uuid'] not in rw_uuids:
-                    to_delete_ids.append(u['id'])
+            for u in all_users:
+                if u.remnawave_uuid and u.remnawave_uuid not in rw_uuids:
+                    to_delete_ids.append(u.id)
             
             if to_delete_ids:
                 logger.info(f"Removing {len(to_delete_ids)} users deleted in Remnawave")
-                await perform_mass_operations(delete_uids=to_delete_ids)
+                await perform_mass_operations(db, delete_uids=to_delete_ids)
 
             # 2. Sync / Create users
             synced_count = 0
-            to_toggle = [] # list of (user_id, enabled)
-            to_create_conns = [] # list of dicts
+            to_toggle = []
+            to_create_conns = []
             
             for rw_u in rw_users:
-                # We reload data in each loop step to handle concurrency
-                data = load_data()
-                local_u = next((u for u in data['users'] if u.get('remnawave_uuid') == rw_u['uuid']), None)
+                stmt = select(models.User).where(models.User.remnawave_uuid == rw_u['uuid'])
+                res = await db.execute(stmt)
+                local_u = res.scalars().first()
                 if not local_u:
-                    local_u = next((u for u in data['users'] if u['username'] == rw_u['username']), None)
+                    stmt = select(models.User).where(models.User.username == rw_u['username'])
+                    res = await db.execute(stmt)
+                    local_u = res.scalars().first()
 
                 is_active = (rw_u.get('status') == 'ACTIVE')
                 
                 if local_u:
-                    local_u['username'] = rw_u['username']
-                    local_u['telegramId'] = rw_u.get('telegramId')
-                    local_u['email'] = rw_u.get('email')
-                    local_u['description'] = rw_u.get('description')
-                    local_u['remnawave_uuid'] = rw_u['uuid']
+                    local_u.username = rw_u['username']
+                    local_u.telegramId = rw_u.get('telegramId')
+                    local_u.email = rw_u.get('email')
+                    local_u.description = rw_u.get('description')
+                    local_u.remnawave_uuid = rw_u['uuid']
                     
-                    if local_u.get('enabled', True) != is_active:
-                        to_toggle.append((local_u['id'], is_active))
-                    
-                    # Save metadata immediately
-                    async with DATA_LOCK:
-                        current = load_data()
-                        # Update index
-                        idx = next((i for i, u in enumerate(current['users']) if u['id'] == local_u['id']), -1)
-                        if idx != -1:
-                            current['users'][idx] = local_u
-                            save_data(current)
-                    
+                    if getattr(local_u, 'enabled', True) != is_active:
+                        to_toggle.append((local_u.id, is_active))
+                        local_u.enabled = is_active
+                        
+                    await db.commit()
                     synced_count += 1
                 else:
                     new_id = str(uuid.uuid4())
-                    new_user = {
-                        'id': new_id,
-                        'username': rw_u['username'],
-                        'password_hash': '', 
-                        'role': 'user',
-                        'telegramId': rw_u.get('telegramId'),
-                        'email': rw_u.get('email'),
-                        'description': rw_u.get('description'),
-                        'enabled': is_active,
-                        'created_at': datetime.now().isoformat(),
-                        'remnawave_uuid': rw_u['uuid'],
-                        'share_enabled': False,
-                        'share_token': secrets.token_urlsafe(16),
-                        'share_password_hash': None,
-                    }
-                    async with DATA_LOCK:
-                        current = load_data()
-                        current['users'].append(new_user)
-                        save_data(current)
+                    new_user = models.User(
+                        id=new_id,
+                        username=rw_u['username'],
+                        password_hash='',
+                        role='user',
+                        telegramId=rw_u.get('telegramId'),
+                        email=rw_u.get('email'),
+                        description=rw_u.get('description'),
+                        enabled=is_active,
+                        remnawave_uuid=rw_u['uuid'],
+                        share_enabled=False,
+                        share_token=secrets.token_urlsafe(16),
+                    )
+                    db.add(new_user)
+                    await db.commit()
                     
                     if settings.get('remnawave_create_conns'):
                         sid = settings.get('remnawave_server_id')
@@ -1434,10 +1406,9 @@ async def sync_users_with_remnawave(data: dict):
                             })
                     synced_count += 1
             
-            # Execute all collected mass operations
             if to_toggle or to_create_conns:
                 logger.info(f"Executing mass ops for Remnawave sync: toggle={len(to_toggle)}, create={len(to_create_conns)}")
-                await perform_mass_operations(toggle_uids=to_toggle, create_conns=to_create_conns)
+                await perform_mass_operations(db, toggle_uids=to_toggle, create_conns=to_create_conns)
             
             return synced_count, "Successfully synchronized with Remnawave"
             
@@ -1445,55 +1416,52 @@ async def sync_users_with_remnawave(data: dict):
         logger.exception("Synchronization error")
         return 0, f"Error: {str(e)}"
 
-
-def get_current_user(request: Request):
+async def get_current_user(db, request: Request):
     user_id = request.session.get('user_id')
     if not user_id:
         return None
-    data = load_data()
-    for u in data.get('users', []):
-        if u['id'] == user_id:
-            return u
-    return None
+    from database import models
+    return await db.get(models.User, user_id)
 
 
-def _check_admin(request):
-    """Authorize an admin/support action via session cookie OR Bearer token.
-
-    Tokens are admin-equivalent and inherit the role of the user who created
-    them — if that user is later disabled or demoted, the token stops working.
-    """
-    user = get_current_user(request)
-    if user and user['role'] in ('admin', 'support'):
+async def _check_admin(db, request: Request):
+    user = await get_current_user(db, request)
+    if user and user.role in ('admin', 'support'):
         return user
-
     auth_header = request.headers.get('Authorization', '')
     if auth_header.lower().startswith('bearer '):
         raw_token = auth_header[7:].strip()
-        data = load_data()
-        resolved = _resolve_api_token(data, raw_token)
-        if resolved:
-            entry, token_user = resolved
-            try:
-                if _touch_api_token(entry):
-                    save_data(data)
-            except Exception as e:
-                logger.warning(f"Failed to touch API token last_used_at: {e}")
-            return token_user
-
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        import hashlib
+        from database import models
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        stmt = select(models.ApiToken).where(models.ApiToken.token_hash == token_hash).options(selectinload(models.ApiToken.user))
+        res = await db.execute(stmt)
+        token = res.scalars().first()
+        if token and token.user and token.user.role in ('admin', 'support') and token.user.enabled:
+            token.last_used_at = models.utcnow()
+            await db.commit()
+            return token.user
     return None
 
 
 
-def tpl(request, template, **kwargs):
-    data = load_data()
+async def tpl(db, request, template, **kwargs):
+    from database.models import Setting
+    from sqlalchemy import select
+    res = await db.execute(select(Setting))
+    settings = {s.key: s.value for s in res.scalars().all()}
+    
     lang = request.cookies.get('lang', 'en')
+    current_user = await get_current_user(db, request)
+    
     ctx = {
         'request': request,
-        'current_user': get_current_user(request),
-        'site_settings': data.get('settings', {}).get('appearance', {}),
-        'captcha_settings': data.get('settings', {}).get('captcha', {}),
-        'telegram_settings': data.get('settings', {}).get('telegram', {}),
+        'current_user': current_user,
+        'site_settings': settings.get('appearance', {}),
+        'captcha_settings': settings.get('captcha', {}),
+        'telegram_settings': settings.get('telegram', {}),
         'bot_running': tg_bot.is_running(),
         'lang': lang,
         '_': lambda text_id: _t(text_id, lang),
@@ -1734,126 +1702,65 @@ class TunnelStartRequest(BaseModel):
 
 # ======================== Startup ========================
 
-def _maybe_migrate_legacy_data_file():
-    """One-time rescue of data.json from the legacy application-directory path.
-
-    Before DATA_FILE honored its env var, the panel wrote to
-    ``<application_path>/data.json``. Operators who got persistence working
-    under ``read_only: true`` rootfs did so by leaving data at that legacy
-    path. Now that DATA_FILE resolves to the volume-backed path (e.g.
-    ``/app/data/data.json`` in compose), this copies the legacy file to the
-    new location ONCE on first boot, so an upgrade does not silently reset
-    the panel to defaults (and lose every encrypted SSH secret).
-
-    Safe no-op for fresh installs (legacy file absent) and for tests (the
-    target path is created by the fixture before this runs). Never overwrites
-    an existing target.
-    """
-    if DATA_FILE == _LEGACY_DATA_FILE:
-        return  # env not overridden — same path, nothing to migrate.
-    if os.path.exists(DATA_FILE):
-        return  # target already present — never overwrite live data.
-    if not os.path.exists(_LEGACY_DATA_FILE):
-        return  # nothing to rescue (fresh install).
-    try:
-        if os.path.getsize(_LEGACY_DATA_FILE) == 0:
-            return
-        os.makedirs(os.path.dirname(DATA_FILE) or '.', exist_ok=True)
-        shutil.copy2(_LEGACY_DATA_FILE, DATA_FILE)
-        logger.warning(
-            "Migrated existing data.json from legacy path %s to %s. "
-            "Back up the legacy file and remove it to avoid confusion.",
-            _LEGACY_DATA_FILE, DATA_FILE,
-        )
-    except Exception as e:
-        logger.error(
-            "Failed to migrate legacy data.json (%s -> %s): %s",
-            _LEGACY_DATA_FILE, DATA_FILE, e,
-        )
-
-
 async def _startup():
-    _maybe_migrate_legacy_data_file()
-    data = load_data()
-    changed = False
-    if not data.get('users'):
-        data['users'] = [{
-            'id': str(uuid.uuid4()),
-            'username': 'admin',
-            'password_hash': hash_password('admin'),
-            'role': 'admin',
-            'enabled': True,
-            'created_at': datetime.now().isoformat(),
-        }]
-        changed = True
-        logger.info("Default admin created (admin / admin)")
-    
-    # Migration for sharing fields and traffic reset strategy
-    for u in data['users']:
-        migrated = False
-        if 'share_enabled' not in u:
-            u['share_enabled'] = False
-            migrated = True
-        if not u.get('share_token'):
-            u['share_token'] = secrets.token_urlsafe(16)
-            migrated = True
-        if 'share_password_hash' not in u:
-            u['share_password_hash'] = None
-            migrated = True
+    from database.session import async_session
+    from database import models
+    from sqlalchemy import select
+    import uuid
+    from datetime import datetime
+    import secrets
+
+    async with async_session() as db:
+        # Default admin
+        stmt = select(models.User).where(models.User.username == 'admin')
+        res = await db.execute(stmt)
+        if not res.scalars().first():
+            db.add(models.User(
+                id=str(uuid.uuid4()),
+                username='admin',
+                password_hash=hash_password('admin'),
+                role='admin',
+                enabled=True,
+                created_at=datetime.now()
+            ))
+            logger.info("Default admin created (admin / admin)")
         
-        # Traffic reset strategy and total traffic
-        if 'traffic_reset_strategy' not in u:
-            u['traffic_reset_strategy'] = 'never'
-            migrated = True
-        if 'traffic_total' not in u:
-            u['traffic_total'] = u.get('traffic_used', 0)
-            migrated = True
-        if 'last_reset_at' not in u:
-            u['last_reset_at'] = datetime.now().isoformat()
-            migrated = True
-        if 'expiration_date' not in u:
-            u['expiration_date'] = None
-            migrated = True
-            
-        if migrated:
-            changed = True
-            logger.info(f"Migrated user {u['username']} to new traffic/sharing fields")
-    
-    # API tokens collection — initialise lazily on first run.
-    if 'api_tokens' not in data:
-        data['api_tokens'] = []
-        changed = True
-        logger.info("Initialised empty api_tokens collection")
+        # SSL settings
+        stmt = select(models.Setting).where(models.Setting.key == 'settings')
+        res = await db.execute(stmt)
+        setting = res.scalars().first()
+        if not setting:
+            setting = models.Setting(key='settings', value={})
+            db.add(setting)
+        
+        settings_dict = setting.value or {}
+        ssl_conf = settings_dict.get('ssl')
+        if not ssl_conf:
+            settings_dict['ssl'] = {
+                'enabled': False,
+                'domain': '',
+                'cert_path': '',
+                'key_path': '',
+                'cert_text': '',
+                'key_text': '',
+                'panel_port': 5000
+            }
+            setting.value = settings_dict
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(setting, "value")
+            logger.info("Migrated SSL settings")
 
-    # SSL settings migration
-    if 'ssl' not in data.get('settings', {}):
-        if 'settings' not in data: data['settings'] = {}
-        data['settings']['ssl'] = {
-            'enabled': False,
-            'domain': '',
-            'cert_path': '',
-            'key_path': '',
-            'cert_text': '',
-            'key_text': '',
-            'panel_port': 5000
-        }
-        changed = True
-        logger.info("Migrated SSL settings")
+        await db.commit()
 
-    if changed:
-        save_data(data)
+        # Telegram
+        tg_cfg = settings_dict.get('telegram', {})
+        if tg_cfg.get('enabled') and tg_cfg.get('token'):
+            logger.info("Starting Telegram bot from saved settings...")
+            tg_bot.launch_bot(tg_cfg['token'], _amnezia_generate_vpn_link)
 
-    # Start periodic background tasks — references kept so the lifespan
-    # shutdown phase can cancel them cleanly (B39).
     global _bg_traffic, _bg_backup
     _bg_traffic = asyncio.create_task(periodic_background_tasks())
     _bg_backup = asyncio.create_task(_background_backup())
-
-    # Start Telegram bot if enabled
-    tg_cfg = data.get('settings', {}).get('telegram', {})
-    if tg_cfg.get('enabled') and tg_cfg.get('token'):
-        logger.info("Starting Telegram bot from saved settings...")
-        tg_bot.launch_bot(tg_cfg['token'], load_data, generate_vpn_link, save_data)
 
 
 def _scrape_server_traffic(server, sid, my_conns):
@@ -1918,109 +1825,94 @@ async def _background_backup():
 
 
 async def periodic_background_tasks():
-    """Background task to sync traffic limits and Remnawave every 10 minutes"""
+    from database.session import async_session
+    from database import models
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
     while True:
         try:
-            # We wait before the first sync to let the app settle
-            await asyncio.sleep(60) 
-            
-            # --- 1. TRAFFIC SYNC & LIMITS ---
+            await asyncio.sleep(60)
             logger.info("Starting background traffic sync...")
-            data = load_data()
             
-            conns_by_server = {}
-            for uc in data.get('user_connections', []):
-                sid = uc['server_id']
-                conns_by_server.setdefault(sid, []).append(uc)
+            async with async_session() as db:
+                stmt = select(models.Server).options(selectinload(models.Server.protocols))
+                res = await db.execute(stmt)
+                servers = res.scalars().all()
                 
-            updates = []
-            
-            for sid, server in enumerate(data.get('servers', [])):
-                if sid not in conns_by_server: continue
-                
-                # Run the blocking SSH traffic scraping in a background thread!
-                server_updates = await asyncio.to_thread(_scrape_server_traffic, server, sid, conns_by_server[sid])
-                if server_updates:
-                    updates.extend(server_updates)
-
-            to_disable_uids = []
-            if updates:
-                async with DATA_LOCK:
-                    curr_data = load_data()
-                    users_map = {u['id']: u for u in curr_data.get('users', [])}
-                    uc_list = curr_data.get('user_connections', [])
-                    uc_map = {uc['id']: uc for uc in uc_list}
+                stmt = select(models.UserConnection)
+                res = await db.execute(stmt)
+                all_conns = res.scalars().all()
+                conns_by_server = {}
+                for uc in all_conns:
+                    conns_by_server.setdefault(uc.server_id, []).append(uc)
                     
-                    # Current date/time for reset checking
+                updates = []
+                for srv in servers:
+                    if srv.id not in conns_by_server: continue
+                    # Transform server and conns to dicts for _scrape_server_traffic
+                    srv_dict = {
+                        "host": srv.host, "ssh_port": srv.ssh_port, "username": srv.username,
+                        "password": srv.password, "private_key": srv.private_key,
+                        "protocols": {p.protocol_type: {} for p in srv.protocols}
+                    }
+                    conns_dict = [{"id": uc.id, "protocol": uc.protocol, "client_id": uc.client_id, "last_bytes": uc.last_bytes} for uc in conns_by_server[srv.id]]
+                    server_updates = await asyncio.to_thread(_scrape_server_traffic, srv_dict, srv.id, conns_dict)
+                    if server_updates:
+                        updates.extend(server_updates)
+                        
+                to_disable_uids = []
+                if updates:
                     now = datetime.now()
-                    
                     for uc_id, delta, curr_bytes in updates:
-                        if uc_id in uc_map:
-                            uc_map[uc_id]['last_bytes'] = curr_bytes
-                            uid = uc_map[uc_id]['user_id']
-                            if uid in users_map:
-                                u = users_map[uid]
-                                # Check if reset is needed BEFORE adding new consumption
-                                strategy = u.get('traffic_reset_strategy', 'never')
-                                last_reset_iso = u.get('last_reset_at')
-                                
+                        uc = await db.get(models.UserConnection, uc_id)
+                        if uc:
+                            uc.last_bytes = curr_bytes
+                            uid = uc.user_id
+                            u = await db.get(models.User, uid)
+                            if u:
+                                strategy = u.traffic_reset_strategy or 'never'
+                                last_reset_iso = u.last_reset_at
                                 reset_needed = False
                                 if strategy != 'never' and last_reset_iso:
                                     try:
-                                        last = datetime.fromisoformat(last_reset_iso)
                                         if strategy == 'daily':
-                                            reset_needed = now.date() > last.date()
+                                            reset_needed = now.date() > last_reset_iso.date()
                                         elif strategy == 'weekly':
-                                            reset_needed = now.isocalendar()[1] != last.isocalendar()[1] or now.year != last.year
+                                            reset_needed = now.isocalendar()[1] != last_reset_iso.isocalendar()[1] or now.year != last_reset_iso.year
                                         elif strategy == 'monthly':
-                                            reset_needed = now.month != last.month or now.year != last.year
-                                    except:
-                                        pass
-                                
+                                            reset_needed = now.month != last_reset_iso.month or now.year != last_reset_iso.year
+                                    except: pass
+                                    
                                 if reset_needed:
-                                    logger.info(f"Resetting traffic for user {u['username']} (strategy: {strategy})")
-                                    u['traffic_used'] = 0
-                                    u['last_reset_at'] = now.isoformat()
+                                    u.traffic_used = 0
+                                    u.last_reset_at = now
+                                    
+                                u.traffic_used = (u.traffic_used or 0) + delta
+                                u.traffic_total = (u.traffic_total or 0) + delta
                                 
-                                # Update both resettable and total traffic
-                                u['traffic_used'] = u.get('traffic_used', 0) + delta
-                                u['traffic_total'] = u.get('traffic_total', 0) + delta
-                                
-                                limit = u.get('traffic_limit', 0)
-                                if limit > 0 and u['traffic_used'] >= limit and u.get('enabled', True):
+                                limit = u.traffic_limit or 0
+                                if limit > 0 and u.traffic_used >= limit and u.enabled:
                                     if uid not in to_disable_uids:
                                         to_disable_uids.append(uid)
-                                
-                                # Check expiration date
-                                exp_str = u.get('expiration_date')
-                                if exp_str and u.get('enabled', True):
+                                        
+                                if u.expiration_date and u.enabled:
                                     try:
-                                        exp_date = datetime.fromisoformat(exp_str)
-                                        if now > exp_date:
-                                            logger.info(f"Subscription expired for user {u['username']} (expired at {exp_str})")
+                                        if now > u.expiration_date:
                                             if uid not in to_disable_uids:
                                                 to_disable_uids.append(uid)
-                                    except:
-                                        pass
-                    save_data(curr_data)
+                                    except: pass
+                    await db.commit()
                     
-            if to_disable_uids:
-                logger.info(f"Traffic limit reached, disabling users: {to_disable_uids}")
-                await perform_mass_operations(toggle_uids=[(uid, False) for uid in to_disable_uids])
-
-            # --- 2. REMNAWAVE SYNC ---
-            logger.info("Starting background Remnawave sync...")
-            data = load_data()
-            if data.get('settings', {}).get('sync', {}).get('remnawave_sync_users'):
-                count, msg = await sync_users_with_remnawave(data)
+                if to_disable_uids:
+                    await perform_mass_operations(db, toggle_uids=[(uid, False) for uid in to_disable_uids])
+                    
+                logger.info("Starting background Remnawave sync...")
+                count, msg = await sync_users_with_remnawave(db)
                 logger.info(f"Background Remnawave sync finished: {count} users updated. {msg}")
-            else:
-                logger.info("Background Remnawave sync skipped (disabled in settings)")
-                
+
         except Exception as e:
             logger.error(f"Error in periodic_background_tasks: {e}")
             
-        # Wait 10 minutes before next sync
         await asyncio.sleep(600)
 
 
@@ -2210,8 +2102,16 @@ app.router.lifespan_context = _app_lifespan
 
 
 if __name__ == '__main__':
-    data = load_data()
-    ssl_conf = data.get('settings', {}).get('ssl', {})
+    async def _get_ssl_conf():
+        from database.session import async_session
+        from database.models import Setting
+        from sqlalchemy import select
+        async with async_session() as db:
+            res = await db.execute(select(Setting).where(Setting.key == 'ssl'))
+            setting = res.scalars().first()
+            return setting.value if setting and setting.value else {}
+            
+    ssl_conf = asyncio.run(_get_ssl_conf())
     
     cert_file = ssl_conf.get('cert_path')
     key_file = ssl_conf.get('key_path')

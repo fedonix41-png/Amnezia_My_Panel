@@ -16,6 +16,7 @@ services:
       - DATA_FILE=/app/data/data.json
       - TUNNEL_STATE_FILE=/app/data/tunnels_state.json
       - BACKUP_DIR=/app/data/backups
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-amnezia}:${POSTGRES_PASSWORD:-secure_password}@db:5432/${POSTGRES_DB:-amnezia_panel}
 
     volumes:
       - amnezia_data:/app/data
@@ -32,6 +33,10 @@ services:
 
     restart: unless-stopped
 
+    depends_on:
+      db:
+        condition: service_healthy
+
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.connect(('localhost', 5000)); s.close()\""]
       interval: 30s
@@ -39,5 +44,22 @@ services:
       retries: 3
       start_period: 40s
 
+  db:
+    image: postgres:15-alpine
+    container_name: amnezia_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-amnezia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-amnezia_panel}
+    volumes:
+      - amnezia_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-QA", "pg_isready", "-U", "${POSTGRES_USER:-amnezia}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   amnezia_data:
+  amnezia_postgres:

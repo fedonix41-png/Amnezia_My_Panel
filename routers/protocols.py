@@ -10,6 +10,11 @@ from pydantic import BaseModel
 import app as app_module
 from managers.awg_manager import AWGManager
 from managers.backup_manager import BackupManager
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from database.session import get_db
+from database import models
 
 router = APIRouter(tags=["Protocols"])
 
@@ -62,29 +67,30 @@ class BackupDownloadRequest(BaseModel):
 
 
 @router.post('/api/servers/{server_id}/install')
-async def api_install_protocol(request: Request, server_id: int, req: InstallProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_install_protocol(request: Request, server_id: int, req: InstallProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         if not app_module.is_valid_protocol(req.protocol):
             return JSONResponse({'error': 'Invalid protocol type'}, status_code=400)
 
-        server = data['servers'][server_id]
-        if 'protocols' not in server:
-            server['protocols'] = {}
+        stmt_protos = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id)
+        res_protos = await db.execute(stmt_protos)
+        db_protocols = {p.protocol_type: p for p in res_protos.scalars().all()}
+
         base_protocol = app_module.protocol_base(req.protocol)
         if req.install_another:
             if base_protocol not in app_module.MULTI_INSTANCE_PROTOCOLS:
                 return JSONResponse({'error': 'Multiple instances are not supported for this protocol yet'}, status_code=400)
-            install_protocol = app_module.next_protocol_key(server.get('protocols', {}), base_protocol)
+            install_protocol = app_module.next_protocol_key(db_protocols, base_protocol)
         else:
             install_protocol = req.protocol
         install_base = app_module.protocol_base(install_protocol)
 
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         docker_install_log = app_module.ensure_docker_installed(ssh)
         manager = app_module.get_protocol_manager(ssh, install_protocol)
@@ -140,30 +146,42 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
             ssh.disconnect()
             return JSONResponse({'error': result.get('message') or result.get('error') or 'Installation failed'}, status_code=400)
 
-        proto_record = {
-            'installed': True,
-            'port': req.port,
-            'awg_params': result.get('awg_params', {}),
-        }
+        proto_record = models.ServerProtocol(
+            server_id=server.id,
+            protocol_type=install_protocol,
+            port=str(req.port),
+            awg_params=result.get('awg_params', {}),
+            base_protocol=install_base,
+            instance=app_module.protocol_instance(install_protocol),
+            display_name=app_module.protocol_display_name(install_protocol),
+            container_name=app_module.protocol_container_name(install_protocol),
+            settings={}
+        )
         if install_base == 'adguard':
-            proto_record['mode'] = result.get('mode')
-            proto_record['internal_ip'] = result.get('internal_ip')
-            proto_record['web_port'] = result.get('web_port')
-            proto_record['expose_web'] = result.get('expose_web')
+            proto_record.settings.update({
+                'mode': result.get('mode'),
+                'internal_ip': result.get('internal_ip'),
+                'web_port': result.get('web_port'),
+                'expose_web': result.get('expose_web')
+            })
         if install_base == 'nginx':
-            proto_record['domain'] = result.get('domain')
-            proto_record['email'] = result.get('email')
-            proto_record['site_url'] = result.get('site_url')
-        proto_record['base_protocol'] = install_base
-        proto_record['instance'] = app_module.protocol_instance(install_protocol)
-        proto_record['display_name'] = app_module.protocol_display_name(install_protocol)
-        proto_record['container_name'] = app_module.protocol_container_name(install_protocol)
-        server['protocols'][install_protocol] = proto_record
+            proto_record.settings.update({
+                'domain': result.get('domain'),
+                'email': result.get('email'),
+                'site_url': result.get('site_url')
+            })
+            
+        if install_protocol in db_protocols:
+            await db.delete(db_protocols[install_protocol])
+            await db.commit()
+            
+        db.add(proto_record)
+        await db.commit()
+        
         result['protocol'] = install_protocol
         result['base_protocol'] = install_base
-        result['display_name'] = proto_record['display_name']
-        result['container_name'] = proto_record['container_name']
-        app_module.save_data(data)
+        result['display_name'] = proto_record.display_name
+        result['container_name'] = proto_record.container_name
         ssh.disconnect()
         return result
     except Exception as e:
@@ -172,16 +190,15 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
 
 
 @router.get('/api/servers/{server_id}/socks5/credentials')
-async def api_socks5_get_credentials(request: Request, server_id: int, protocol: str = 'socks5'):
-    if not app_module._check_admin(request):
+async def api_socks5_get_credentials(request: Request, server_id: int, protocol: str = 'socks5', db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
         protocol = protocol if app_module.is_valid_protocol(protocol) and app_module.protocol_base(protocol) == 'socks5' else 'socks5'
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, protocol)
         creds = manager.get_credentials()
@@ -193,16 +210,15 @@ async def api_socks5_get_credentials(request: Request, server_id: int, protocol:
 
 
 @router.post('/api/servers/{server_id}/socks5/credentials')
-async def api_socks5_update_credentials(request: Request, server_id: int, req: Socks5SettingsRequest):
-    if not app_module._check_admin(request):
+async def api_socks5_update_credentials(request: Request, server_id: int, req: Socks5SettingsRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
         protocol = req.protocol if app_module.is_valid_protocol(req.protocol) and app_module.protocol_base(req.protocol) == 'socks5' else 'socks5'
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, protocol)
         result = manager.update_credentials(
@@ -210,14 +226,23 @@ async def api_socks5_update_credentials(request: Request, server_id: int, req: S
         )
         ssh.disconnect()
         if result.get('status') == 'success' and result.get('port'):
-            srv_proto = server.setdefault('protocols', {}).setdefault(protocol, {})
-            srv_proto['port'] = str(result['port'])
-            srv_proto['installed'] = True
-            srv_proto['base_protocol'] = app_module.protocol_base(protocol)
-            srv_proto['instance'] = app_module.protocol_instance(protocol)
-            srv_proto['display_name'] = app_module.protocol_display_name(protocol)
-            srv_proto['container_name'] = app_module.protocol_container_name(protocol)
-            app_module.save_data(data)
+            stmt = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id, models.ServerProtocol.protocol_type == protocol)
+            res = await db.execute(stmt)
+            srv_proto = res.scalar_one_or_none()
+            if srv_proto:
+                srv_proto.port = str(result['port'])
+            else:
+                srv_proto = models.ServerProtocol(
+                    server_id=server_id,
+                    protocol_type=protocol,
+                    port=str(result['port']),
+                    base_protocol=app_module.protocol_base(protocol),
+                    instance=app_module.protocol_instance(protocol),
+                    display_name=app_module.protocol_display_name(protocol),
+                    container_name=app_module.protocol_container_name(protocol)
+                )
+                db.add(srv_proto)
+            await db.commit()
         return result
     except Exception as e:
         app_module.logger.exception("Error updating SOCKS5 credentials")
@@ -225,15 +250,14 @@ async def api_socks5_update_credentials(request: Request, server_id: int, req: S
 
 
 @router.post('/api/servers/{server_id}/uninstall')
-async def api_uninstall_protocol(request: Request, server_id: int, req: ProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_uninstall_protocol(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         manager = app_module.get_protocol_manager(ssh, req.protocol)
         base = app_module.protocol_base(req.protocol)
@@ -241,9 +265,14 @@ async def api_uninstall_protocol(request: Request, server_id: int, req: Protocol
             manager.remove_container()
         else:
             manager.remove_container(req.protocol)
-        if req.protocol in server.get('protocols', {}):
-            del server['protocols'][req.protocol]
-            app_module.save_data(data)
+            
+        stmt = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id, models.ServerProtocol.protocol_type == req.protocol)
+        res = await db.execute(stmt)
+        p = res.scalar_one_or_none()
+        if p:
+            await db.delete(p)
+            await db.commit()
+            
         ssh.disconnect()
         return {'status': 'success'}
     except Exception as e:
@@ -252,18 +281,17 @@ async def api_uninstall_protocol(request: Request, server_id: int, req: Protocol
 
 
 @router.post('/api/servers/{server_id}/backups')
-async def api_protocol_backups_list(request: Request, server_id: int, req: ProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_protocol_backups_list(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if not app_module.is_valid_protocol(req.protocol):
         return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
     ssh = None
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         result = BackupManager(ssh).list_backups(req.protocol)
         if result.get('status') == 'error':
@@ -278,21 +306,20 @@ async def api_protocol_backups_list(request: Request, server_id: int, req: Proto
 
 
 @router.post('/api/servers/{server_id}/backups/create')
-async def api_protocol_backup_create(request: Request, server_id: int, req: ProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_protocol_backup_create(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if not app_module.is_valid_protocol(req.protocol):
         return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
     ssh = None
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         container = app_module.protocol_container_name(req.protocol)
         if not container:
             return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         result = BackupManager(ssh).create_backup(req.protocol, container)
         if result.get('status') == 'error':
@@ -307,8 +334,8 @@ async def api_protocol_backup_create(request: Request, server_id: int, req: Prot
 
 
 @router.post('/api/servers/{server_id}/backups/download')
-async def api_protocol_backup_download(request: Request, server_id: int, req: BackupDownloadRequest):
-    if not app_module._check_admin(request):
+async def api_protocol_backup_download(request: Request, server_id: int, req: BackupDownloadRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if not app_module.is_valid_protocol(req.protocol):
         return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
@@ -322,11 +349,10 @@ async def api_protocol_backup_download(request: Request, server_id: int, req: Ba
     tmp_remote = f'/tmp/{filename}'
     remote_path = f'{manager.BACKUP_ROOT}/{safe_proto}/{filename}'
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         quoted_remote = shlex.quote(remote_path)
         quoted_tmp = shlex.quote(tmp_remote)
@@ -365,18 +391,17 @@ async def api_protocol_backup_download(request: Request, server_id: int, req: Ba
 
 
 @router.post('/api/servers/{server_id}/container/toggle')
-async def api_container_toggle(request: Request, server_id: int, req: ProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_container_toggle(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         container = app_module.protocol_container_name(req.protocol)
         if not container:
             return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         out, _, _ = ssh.run_sudo_command(
             f"docker inspect -f '{{{{.State.Running}}}}' {container} 2>/dev/null"
@@ -396,15 +421,14 @@ async def api_container_toggle(request: Request, server_id: int, req: ProtocolRe
 
 
 @router.post('/api/servers/{server_id}/server_config')
-async def api_server_config(request: Request, server_id: int, req: ProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_server_config(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         if app_module.protocol_base(req.protocol) == 'xray':
             from managers.xray_manager import XrayManager
@@ -435,15 +459,14 @@ async def api_server_config(request: Request, server_id: int, req: ProtocolReque
 
 
 @router.post('/api/servers/{server_id}/server_config/save')
-async def api_server_config_save(request: Request, server_id: int, req: ServerConfigSaveRequest):
-    if not app_module._check_admin(request):
+async def api_server_config_save(request: Request, server_id: int, req: ServerConfigSaveRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         if app_module.protocol_base(req.protocol) == 'xray':
             from managers.xray_manager import XrayManager
@@ -478,17 +501,16 @@ async def api_server_config_save(request: Request, server_id: int, req: ServerCo
 
 
 @router.post('/api/servers/{server_id}/nginx/site')
-async def api_nginx_site_get(request: Request, server_id: int, req: ProtocolRequest):
-    if not app_module._check_admin(request):
+async def api_nginx_site_get(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         if app_module.protocol_base(req.protocol) != 'nginx':
             return JSONResponse({'error': 'Invalid protocol type'}, status_code=400)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         from managers.nginx_manager import NginxManager
         mgr = NginxManager(ssh, req.protocol)
@@ -501,17 +523,16 @@ async def api_nginx_site_get(request: Request, server_id: int, req: ProtocolRequ
 
 
 @router.post('/api/servers/{server_id}/nginx/site/save')
-async def api_nginx_site_save(request: Request, server_id: int, req: NginxSiteSaveRequest):
-    if not app_module._check_admin(request):
+async def api_nginx_site_save(request: Request, server_id: int, req: NginxSiteSaveRequest, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        if server_id >= len(data['servers']):
+        server = await db.get(models.Server, server_id)
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         if app_module.protocol_base(req.protocol) != 'nginx':
             return JSONResponse({'error': 'Invalid protocol type'}, status_code=400)
-        server = data['servers'][server_id]
-        ssh = app_module.get_ssh(server)
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
         from managers.nginx_manager import NginxManager
         mgr = NginxManager(ssh, req.protocol)

@@ -7,6 +7,13 @@ from pydantic import BaseModel
 import config
 import app as app_module
 
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from database.session import get_db
+from database import models
+
 router = APIRouter(tags=["Sharing", "Self-service"])
 
 
@@ -20,53 +27,63 @@ class ShareAuthRequest(BaseModel):
 
 
 @router.post('/api/users/{user_id}/share/setup', tags=["Users"])
-async def api_user_share_setup(user_id: str, req: ShareSetupRequest, request: Request):
-    if not app_module._check_admin(request):
+async def api_user_share_setup(user_id: str, req: ShareSetupRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    data = app_module.load_data()
-    user = next((u for u in data['users'] if u['id'] == user_id), None)
+    user = await db.get(models.User, user_id)
     if not user:
         return JSONResponse({'error': 'User not found'}, status_code=404)
     
-    user['share_enabled'] = req.enabled
-    if not user.get('share_token'):
-        user['share_token'] = secrets.token_urlsafe(16)
+    user.share_enabled = req.enabled
+    if not user.share_token:
+        user.share_token = secrets.token_urlsafe(16)
     if req.password:
-        user['share_password_hash'] = app_module.hash_password(req.password)
+        user.share_password_hash = app_module.hash_password(req.password)
     elif req.password == "":
-        user['share_password_hash'] = None
+        user.share_password_hash = None
         
-    app_module.save_data(data)
-    return {'status': 'success', 'share_token': user.get('share_token')}
+    await db.commit()
+    return {'status': 'success', 'share_token': user.share_token}
 
 
 @router.get('/share/{token}', response_class=HTMLResponse, tags=["System Templates"])
 @app_module.limiter.limit(config.SHARE_RATE_LIMIT)
-async def share_page(token: str, request: Request):
-    data = app_module.load_data()
-    user = next((u for u in data['users'] if u.get('share_token') == token), None)
-    if not user or not user.get('share_enabled'):
+async def share_page(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.User).where(models.User.share_token == token)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    
+    if not user or not user.share_enabled:
         lang = request.cookies.get('lang', 'ru')
         return HTMLResponse(f"<h1>{app_module._t('share_not_found', lang)}</h1><p>{app_module._t('share_not_found_desc', lang)}</p>", status_code=404)
     
     auth_session_key = f'share_auth_{token}'
-    need_password = bool(user.get('share_password_hash')) and not request.session.get(auth_session_key)
+    need_password = bool(user.share_password_hash) and not request.session.get(auth_session_key)
     
-    return app_module.tpl(request, 'user_share.html', 
-               share_user=user, 
+    user_dict = {
+        'id': user.id,
+        'username': user.username,
+        'share_token': user.share_token,
+        'share_enabled': user.share_enabled,
+        'share_password_hash': user.share_password_hash
+    }
+    return await app_module.tpl(db, request, 'user_share.html', 
+               share_user=user_dict, 
                need_password=need_password, 
                token=token)
 
 
 @router.post('/api/share/{token}/auth')
 @app_module.limiter.limit(config.SHARE_RATE_LIMIT)
-async def api_share_auth(token: str, req: ShareAuthRequest, request: Request):
-    data = app_module.load_data()
-    user = next((u for u in data['users'] if u.get('share_token') == token), None)
-    if not user or not user.get('share_enabled'):
+async def api_share_auth(token: str, req: ShareAuthRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.User).where(models.User.share_token == token)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    
+    if not user or not user.share_enabled:
         return JSONResponse({'error': 'Link expired or disabled'}, status_code=404)
     
-    if app_module.verify_password(req.password, user.get('share_password_hash', '')):
+    if app_module.verify_password(req.password, user.share_password_hash or ''):
         request.session[f'share_auth_{token}'] = True
         return {'status': 'success'}
     else:
@@ -76,52 +93,79 @@ async def api_share_auth(token: str, req: ShareAuthRequest, request: Request):
 
 @router.get('/api/share/{token}/connections')
 @app_module.limiter.limit(config.SHARE_RATE_LIMIT)
-async def api_share_connections(token: str, request: Request):
-    data = app_module.load_data()
-    user = next((u for u in data['users'] if u.get('share_token') == token), None)
-    if not user or not user.get('share_enabled'):
+async def api_share_connections(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.User).where(models.User.share_token == token)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    
+    if not user or not user.share_enabled:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     
-    if user.get('share_password_hash'):
+    if user.share_password_hash:
         if not request.session.get(f'share_auth_{token}'):
             return JSONResponse({'error': 'Unauthorized'}, status_code=401)
             
-    conns = [dict(c) for c in data.get('user_connections', []) if c['user_id'] == user['id']]
-    for c in conns:
-        sid = c['server_id']
-        if sid < len(data['servers']):
-            c['server_name'] = data['servers'][sid].get('name') or data['servers'][sid]['host']
-        else:
-            c['server_name'] = 'Unknown'
+    stmt_conns = select(models.Connection).where(models.Connection.user_id == user.id).options(selectinload(models.Connection.server))
+    conns_res = await db.execute(stmt_conns)
+    
+    conns = []
+    for c in conns_res.scalars().all():
+        conns.append({
+            'id': c.id,
+            'user_id': c.user_id,
+            'server_id': c.server_id,
+            'protocol': c.protocol,
+            'client_id': c.client_id,
+            'name': c.name,
+            'created_at': c.created_at,
+            'server_name': c.server.name if c.server else 'Unknown'
+        })
             
-    return {'connections': conns, 'username': user['username']}
+    return {'connections': conns, 'username': user.username}
 
 
 @router.post('/api/share/{token}/config/{connection_id}')
 @app_module.limiter.limit(config.SHARE_RATE_LIMIT)
-async def api_share_config(token: str, connection_id: str, request: Request):
-    data = app_module.load_data()
-    user = next((u for u in data['users'] if u.get('share_token') == token), None)
-    if not user or not user.get('share_enabled'):
+async def api_share_config(token: str, connection_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    stmt = select(models.User).where(models.User.share_token == token)
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+    
+    if not user or not user.share_enabled:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     
-    if user.get('share_password_hash'):
+    if user.share_password_hash:
         if not request.session.get(f'share_auth_{token}'):
             return JSONResponse({'error': 'Unauthorized'}, status_code=401)
             
-    conn = next((c for c in data.get('user_connections', []) if c['id'] == connection_id and c['user_id'] == user['id']), None)
+    stmt_conn = select(models.Connection).where(
+        models.Connection.id == connection_id,
+        models.Connection.user_id == user.id
+    ).options(selectinload(models.Connection.server))
+    
+    conn_res = await db.execute(stmt_conn)
+    conn = conn_res.scalar_one_or_none()
+    
     if not conn:
         return JSONResponse({'error': 'Not found'}, status_code=404)
         
     try:
-        sid = conn['server_id']
-        server = data['servers'][sid]
-        proto_info = server.get('protocols', {}).get(conn['protocol'], {})
-        port = proto_info.get('port', '55424')
-        ssh = app_module.get_ssh(server)
+        server = conn.server
+        if not server:
+            return JSONResponse({'error': 'Server not found'}, status_code=404)
+            
+        stmt_proto = select(models.ServerProtocol).where(
+            models.ServerProtocol.server_id == server.id,
+            models.ServerProtocol.protocol_type == conn.protocol
+        )
+        proto_res = await db.execute(stmt_proto)
+        proto_info = proto_res.scalar_one_or_none()
+        port = proto_info.port if proto_info else '55424'
+        
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, conn['protocol'])
-        config_text = app_module._manager_call(manager, 'get_client_config', conn['protocol'], conn['client_id'], server['host'], port)
+        manager = app_module.get_protocol_manager(ssh, conn.protocol)
+        config_text = app_module._manager_call(manager, 'get_client_config', conn.protocol, conn.client_id, server.host, port)
         ssh.disconnect()
         vpn_link = app_module.generate_vpn_link(config_text) if config_text else ''
         qr_content = app_module.generate_qr_content(config_text) if config_text else ''
@@ -132,28 +176,38 @@ async def api_share_config(token: str, connection_id: str, request: Request):
 
 
 @router.post('/api/my/connections/{connection_id}/config')
-async def api_my_connection_config(request: Request, connection_id: str):
-    user = app_module.get_current_user(request)
+async def api_my_connection_config(request: Request, connection_id: str, db: AsyncSession = Depends(get_db)):
+    user = await app_module.get_current_user(db, request)
     if not user:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        data = app_module.load_data()
-        conn = next(
-            (c for c in data.get('user_connections', []) if c['id'] == connection_id and c['user_id'] == user['id']),
-            None
-        )
+        stmt_conn = select(models.Connection).where(
+            models.Connection.id == connection_id,
+            models.Connection.user_id == user.id
+        ).options(selectinload(models.Connection.server))
+        
+        conn_res = await db.execute(stmt_conn)
+        conn = conn_res.scalar_one_or_none()
+        
         if not conn:
             return JSONResponse({'error': 'Connection not found'}, status_code=404)
-        sid = conn['server_id']
-        if sid >= len(data['servers']):
+            
+        server = conn.server
+        if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        server = data['servers'][sid]
-        proto_info = server.get('protocols', {}).get(conn['protocol'], {})
-        port = proto_info.get('port', '55424')
-        ssh = app_module.get_ssh(server)
+            
+        stmt_proto = select(models.ServerProtocol).where(
+            models.ServerProtocol.server_id == server.id,
+            models.ServerProtocol.protocol_type == conn.protocol
+        )
+        proto_res = await db.execute(stmt_proto)
+        proto_info = proto_res.scalar_one_or_none()
+        port = proto_info.port if proto_info else '55424'
+        
+        ssh = app_module.get_ssh(server, db)
         ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, conn['protocol'])
-        config_text = app_module._manager_call(manager, 'get_client_config', conn['protocol'], conn['client_id'], server['host'], port)
+        manager = app_module.get_protocol_manager(ssh, conn.protocol)
+        config_text = app_module._manager_call(manager, 'get_client_config', conn.protocol, conn.client_id, server.host, port)
         ssh.disconnect()
         vpn_link = app_module.generate_vpn_link(config_text) if config_text else ''
         qr_content = app_module.generate_qr_content(config_text) if config_text else ''

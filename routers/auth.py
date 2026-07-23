@@ -6,6 +6,12 @@ from pydantic import BaseModel
 
 import config
 import app as app_module
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from database.session import get_db
+from database import models
+from database.crud import get_setting
 
 try:
     from multicolorcaptcha import CaptchaGenerator
@@ -41,9 +47,8 @@ async def api_captcha(request: Request):
 
 @router.post('/api/auth/login')
 @app_module.limiter.limit(config.LOGIN_RATE_LIMIT)
-async def api_login(request: Request, req: LoginRequest):
-    data = app_module.load_data()
-    captcha_settings = data.get('settings', {}).get('captcha', {})
+async def api_login(request: Request, req: LoginRequest, db: AsyncSession = Depends(get_db)):
+    captcha_settings = await get_setting(db, 'captcha', {})
     if captcha_settings.get('enabled') is True:
         answer = request.session.get('captcha_answer')
         lang = request.cookies.get('lang', 'ru')
@@ -52,12 +57,16 @@ async def api_login(request: Request, req: LoginRequest):
             return JSONResponse({'error': app_module._t('invalid_captcha', lang)}, status_code=400)
         request.session.pop('captcha_answer', None)
 
-    for u in data.get('users', []):
-        if u['username'] == req.username and app_module.verify_password(req.password, u['password_hash']):
-            lang = request.cookies.get('lang', 'ru')
-            if not u.get('enabled', True):
-                return JSONResponse({'error': app_module._t('account_disabled', lang)}, status_code=403)
-            request.session['user_id'] = u['id']
-            return {'status': 'success', 'role': u['role']}
+    stmt = select(models.User).where(models.User.username == req.username)
+    result = await db.execute(stmt)
+    u = result.scalar_one_or_none()
+    
+    if u and app_module.verify_password(req.password, u.password_hash):
+        lang = request.cookies.get('lang', 'ru')
+        if not u.enabled:
+            return JSONResponse({'error': app_module._t('account_disabled', lang)}, status_code=403)
+        request.session['user_id'] = u.id
+        return {'status': 'success', 'role': u.role}
+    
     lang = request.cookies.get('lang', 'ru')
     return JSONResponse({'error': app_module._t('invalid_login', lang)}, status_code=401)

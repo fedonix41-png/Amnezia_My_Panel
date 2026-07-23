@@ -1,16 +1,21 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 import app as app_module
+from database.session import get_db
+from database import models
 
 router = APIRouter(tags=["System Templates"])
 
 
 @router.get('/login', response_class=HTMLResponse)
-async def login_page(request: Request):
-    if app_module.get_current_user(request):
+async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
+    if await app_module.get_current_user(db, request):
         return RedirectResponse(url='/', status_code=302)
-    return app_module.tpl(request, 'login.html')
+    return await app_module.tpl(db, request, 'login.html')
 
 
 @router.get("/set_lang/{lang}")
@@ -28,60 +33,82 @@ async def logout(request: Request):
 
 
 @router.get('/', response_class=HTMLResponse)
-async def index(request: Request):
-    user = app_module.get_current_user(request)
+async def index(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await app_module.get_current_user(db, request)
     if not user:
         return RedirectResponse(url='/login', status_code=302)
-    if user['role'] == 'user':
+    if user.role == 'user':
         return RedirectResponse(url='/my', status_code=302)
-    data = app_module.load_data()
-    return app_module.tpl(request, 'index.html', servers=data['servers'])
+        
+    stmt_servers = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
+    res_servers = await db.execute(stmt_servers)
+    servers = [{"id": s.id, "name": s.name, "host": s.host} for s in res_servers.scalars().all()]
+    
+    return await app_module.tpl(db, request, 'index.html', servers=servers)
 
 
 @router.get('/server/{server_id}', response_class=HTMLResponse)
-async def server_detail(request: Request, server_id: int):
-    user = app_module.get_current_user(request)
+async def server_detail(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
+    user = await app_module.get_current_user(db, request)
     if not user:
         return RedirectResponse(url='/login', status_code=302)
-    if user['role'] not in ('admin', 'support'):
+    if user.role not in ('admin', 'support'):
         return RedirectResponse(url='/my', status_code=302)
-    data = app_module.load_data()
-    if server_id >= len(data['servers']):
+        
+    server = await db.get(models.Server, server_id)
+    if not server:
         return RedirectResponse(url='/')
-    server = data['servers'][server_id]
-    users_list = data.get('users', [])
-    return app_module.tpl(request, 'server.html', server=server, server_id=server_id, users=users_list)
+        
+    stmt_users = select(models.User)
+    res_users = await db.execute(stmt_users)
+    users_list = [u.__dict__ for u in res_users.scalars().all()]
+    
+    return await app_module.tpl(db, request, 'server.html', server=server.__dict__, server_id=server_id, users=users_list)
 
 
 @router.get('/users', response_class=HTMLResponse)
-async def users_page(request: Request):
-    user = app_module.get_current_user(request)
+async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await app_module.get_current_user(db, request)
     if not user:
         return RedirectResponse(url='/login', status_code=302)
-    if user['role'] not in ('admin', 'support'):
+    if user.role not in ('admin', 'support'):
         return RedirectResponse(url='/my', status_code=302)
-    data = app_module.load_data()
-    users_list = data.get('users', [])
-    # Count connections per user
-    conns = data.get('user_connections', [])
-    for u in users_list:
-        u['connections_count'] = sum(1 for c in conns if c['user_id'] == u['id'])
-    servers = data['servers']
-    return app_module.tpl(request, 'users.html', users=users_list, servers=servers)
+        
+    stmt_users = select(models.User).options(selectinload(models.User.connections))
+    res_users = await db.execute(stmt_users)
+    users_list = []
+    for u in res_users.scalars().all():
+        u_dict = u.__dict__.copy()
+        u_dict['connections_count'] = len(u.connections)
+        users_list.append(u_dict)
+        
+    stmt_servers = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
+    res_servers = await db.execute(stmt_servers)
+    servers = [s.__dict__ for s in res_servers.scalars().all()]
+    
+    return await app_module.tpl(db, request, 'users.html', users=users_list, servers=servers)
 
 
 @router.get('/my', response_class=HTMLResponse)
-async def my_connections_page(request: Request):
-    user = app_module.get_current_user(request)
+async def my_connections_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await app_module.get_current_user(db, request)
     if not user:
         return RedirectResponse(url='/login', status_code=302)
-    data = app_module.load_data()
-    conns = [c for c in data.get('user_connections', []) if c['user_id'] == user['id']]
-    # Enrich with server names
-    for c in conns:
-        sid = c.get('server_id', 0)
-        if sid < len(data['servers']):
-            c['server_name'] = data['servers'][sid].get('name', data['servers'][sid].get('host', ''))
-        else:
-            c['server_name'] = 'Unknown'
-    return app_module.tpl(request, 'my_connections.html', connections=conns)
+        
+    stmt_conns = select(models.Connection).where(models.Connection.user_id == user.id).options(selectinload(models.Connection.server))
+    res_conns = await db.execute(stmt_conns)
+    
+    conns = []
+    for c in res_conns.scalars().all():
+        conns.append({
+            'id': c.id,
+            'user_id': c.user_id,
+            'server_id': c.server_id,
+            'protocol': c.protocol,
+            'client_id': c.client_id,
+            'name': c.name,
+            'created_at': c.created_at,
+            'server_name': c.server.name if c.server else 'Unknown'
+        })
+        
+    return await app_module.tpl(db, request, 'my_connections.html', connections=conns)
