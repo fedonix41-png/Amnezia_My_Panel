@@ -1,42 +1,39 @@
 # Antigravity Workspace — GEMINI.md
 
-Проектные конвенции — в `AGENTS.md`. Этот файл: директивы навигации по кодовой базе, реестр субагентов, workflow'ы Antigravity.
+Project conventions live in `AGENTS.md`. This file covers codebase navigation, sub-agent registry, and Antigravity workflows.
 
-## Навигация по коду
+## Codebase navigation
 
-Файлы ядра большие — не читай целиком без необходимости. Паттерн:
+The core files are large. A practical approach:
 
-- `app.py` (~2233 строк), `routers/*.py`, `telegram_bot.py` (~51KB) → **grep по сигнатуре/декоратору → read с offset/limit → ссылайся как `file:line`.**
-- Глубокий контекст (схема данных, реестр протоколов, security-границы) → `docs/ARCHITECTURE.md`.
-- Разведка незнакомой области → Task-субагент `explore` или `research` (Read-Only), не загружай файлы в основной контекст.
+- `app.py` (~2157 lines), `telegram_bot.py` (~1680 lines) — `grep` by function signature or decorator, then `read` with offset/limit. Reference as `file:line` in your notes.
+- Deep context (data schema, protocol registry, security boundaries) — `docs/ARCHITECTURE.md`.
+- When exploring unfamiliar territory, consider using a Read-Only sub-agent (`explore` / `research`) to avoid loading large files into the main context.
 
-## Якоря частых точек входа
+## Common entry points (grep by name, not line numbers)
 
-- `_check_admin`: `app.py:1450`
-- Middleware: `app.py:125-145`
-- `load_data`: `app.py:216`
-- `get_ssh`: `app.py:256`
-- `DATA_FILE`: `app.py:156`
-- Монтирование роутеров: `app.py:2020-2035`
-- `BASE_PROTOCOLS`: `app.py:902`
-- `get_protocol_manager`: `app.py:999`
-- SSH host key pinning: `ssh_manager.py:104-114`
-- `build_initial_server_json`: `xray_manager.py:13`
+- `_check_admin` — central authorization gate, signature: `_check_admin(db, request)`
+- `get_ssh` — SSHManager factory (handles both dict and ORM model inputs)
+- `get_protocol_manager` — protocol dispatcher with lazy imports
+- `_manager_call` — unified manager method call (hides WireGuard special-case)
+- `BASE_PROTOCOLS` / `MULTI_INSTANCE_PROTOCOLS` — protocol registry
+- `ensure_docker_installed` — remote Docker installation
+- SSH host key pinning: `ssh_manager.py` (`_PinningHostKeyPolicy`)
+- `build_initial_server_json`: `xray_manager.py` (VLESS-Reality structure)
+- Router mounting: `app.py` (`app.include_router`)
+- Startup/lifespan: `app.py` (`_app_lifespan`, `_startup`)
+- Database models: `database/models.py` (User, Server, ServerProtocol, UserConnection, ApiToken, Setting)
+- Repositories: `database/repositories.py` (UserRepository, ServerRepository)
 
-## Субагенты
+## Sub-agents
 
-- **`explore` / `research`** (Read-Only) — разведка кода, документации, внешних библиотек без засорения контекста.
-- **`protocol-builder`** (Write) — новый VPN/Proxy протокол: `managers/`, `routers/protocols.py`, `app.py`. Чек-лист: `docs/ARCHITECTURE.md` §13.
-- **`security-auditor`** (Read-Only) — аудит SSH (paramiko stdin), Fernet (`v1:`), `shlex.quote`, эндпоинты.
-- **`refactor-auditor`** (Write) — рефакторинг с сохранением 100% обратной совместимости и зелёным pytest.
+- **`explore` / `research`** (Read-Only) — codebase exploration, documentation research, external library lookups without polluting the main context.
+- **`protocol-builder`** (Write) — new VPN/proxy protocol end-to-end: `managers/`, `routers/protocols.py`, `app.py`. Checklist: `docs/ARCHITECTURE.md` §13.
+- **`security-auditor`** (Read-Only) — SSH (paramiko stdin), Fernet (`v1:`), `shlex.quote`, endpoint security review.
+- **`refactor-auditor`** (Write) — refactoring with 100% backward compatibility and passing tests.
 
-## Workflow'ы
+## Workflows
 
-- Крупные автономные задачи → `/goal` с итерациями до полного выполнения.
-- Перед крупными архитектурными правками → `implementation_plan.md` в Planning Mode.
-- **Обязательная верификация**: ни одно изменение не считается завершённым без `venv/bin/python -m pytest`.
-
-## Инструментальные заметки
-
-- Перед CLI-командой может появиться блок `[kcp] ...` (opencode-kcp-plugin) со структурой флагов — используй его, не запускай `--help`.
-- При длинном хвосте сессии перед серией правок → `/compact`.
+- Large autonomous tasks work well with the `/goal` flow — iterate until complete.
+- Before major architectural changes, an `implementation_plan.md` in Planning Mode helps align on approach before writing code.
+- Running `venv/bin/python -m pytest` after changes is the standard verification step. Tests use an in-memory SQLite database, so no external setup is needed.

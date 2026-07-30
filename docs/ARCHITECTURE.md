@@ -6,7 +6,7 @@
 
 ## 1. Технологический стек и запуск
 
-- **Язык**: Python **3.14** (`Dockerfile:3` — `FROM python:3.14-slim`).
+- **Язык**: Python **3.12+** (`Dockerfile:3` — `FROM python:3.12-slim`).
 - **Веб-фреймворк**: **FastAPI** (ASGI) поверх **Starlette**.
   - `app.py:29` — `from fastapi import FastAPI, Request, Query, UploadFile, File`
   - `app.py:82` — `app = FastAPI(title="Amnezia Web Panel", openapi_tags=OPENAPI_TAGS, redoc_url=None)`
@@ -52,64 +52,69 @@
 - `MASTER_KEY`: синтезируется **эфемерный** `Fernet.generate_key()` (`config.py:85-96`). В обоих случаях выдаётся warning.
 - Также расслабляет валидацию entrypoint (`docker-entrypoint.sh:6-8`) и пропускает `TrustedHostMiddleware` (`app.py:141`).
 
-## 3. Модель данных `data.json`
+## 3. Модель данных (SQLAlchemy ORM)
 
-### Слой загрузки/сохранения (`app.py`)
+Данные хранятся в реляционной БД через SQLAlchemy (async). Схема определена в `database/models.py`. Production: PostgreSQL через `asyncpg`; Dev: SQLite через `aiosqlite`. Конфигурация подключения — `config.DATABASE_URL`. Сессии — `database/session.py` (`get_db` dependency, `get_db_context` context manager).
 
-- Резолв `DATA_FILE`: `app.py:153` — учитывает `sys.frozen` (PyInstaller), иначе каталог скрипта; basename `data.json`. Переопределяется через env `DATA_FILE` (используется docker-compose: `DATA_FILE=/app/data/data.json`, и тестами). При апгрейде — если новый путь пуст, а старый (`_LEGACY_DATA_FILE`, `app.py:157`) существует и не пуст, `_maybe_migrate_legacy_data_file` (`app.py:1737`) копирует его one-time при старте, чтобы не потерять зашифрованные секреты.
-- `DATA_LOCK = asyncio.Lock()` (`app.py:210`) — защита конкурентных записей.
-- `load_data()` (`app.py:213-238`) — `json.load` + `setdefault` по каждому top-level ключу.
-- `save_data(data)` (`app.py:242-244`) — синхронный `json.dump(..., indent=2, ensure_ascii=False)`.
-- `save_data_async(data)` (`app.py:247-249`) — `asyncio.to_thread(save_data)` под `DATA_LOCK`.
-- `get_ssh(server)` (`app.py:253-265`) — строит `SSHManager`, расшифровывая `password`/`private_key` через `decrypt_secret`.
+`data.json` — **legacy**, больше не является первичным хранилищем. Функции `load_data`/`save_data`/`DATA_LOCK` удалены. Бэкапы через `routers/settings.py` теперь работают с JSON-экспортом из БД.
 
-### Top-level схема
+### ORM-модели (`database/models.py`)
 
-```
-{
-  "servers": [ ... ],          # app.py:201
-  "users": [ ... ],            # app.py:202
-  "user_connections": [ ... ], # app.py:203
-  "api_tokens": [ ... ],       # app.py:204
-  "settings": { appearance, sync, ssl, captcha, telegram }  # app.py:205-220 (+ миграции)
-}
-```
+**`User`** (таблица `users`):
+- `id` (UUID, PK), `username` (unique, index), `password_hash` (PBKDF2, см. §5), `role` (`admin`|`support`|`user`), `enabled`, `created_at`
+- Шеринг: `share_enabled`, `share_token`, `share_password_hash`
+- Трафик: `traffic_reset_strategy`, `traffic_used` (BigInteger), `traffic_total` (BigInteger), `last_reset_at`, `expiration_date`, `traffic_limit`
+- Опционально: `telegramId` (BigInteger), `email`, `description`, `remnawave_uuid`
+- Relationships: `connections` → `UserConnection`, `api_tokens` → `ApiToken` (cascade delete)
 
-**`servers[]`** (запись через `routers/servers.py`):
-- `name`, `host`, `ssh_port`, `username`
-- `password` *(зашифрован, см. §8)*, `private_key` *(зашифрован)*
-- `server_info` (строка ОС из `uname`), `host_fingerprint` (SHA256 SSH-публичного ключа)
-- `protocols` — dict, ключ — строка протокола (`awg2`, `awg_legacy`, `xray__2`); значение: `{installed, port, base_protocol, instance, display_name, container_name, awg_params|mode|domain...}` (запись `routers/protocols.py:140-158`).
+**`Server`** (таблица `servers`):
+- `id` (int, PK), `display_order`, `name`, `host`, `ssh_port` (default 22), `username`
+- `password` *(v1: Fernet, см. §8)*, `private_key` *(v1: Fernet)*
+- `server_info`, `host_fingerprint` (SHA256 SSH-публичного ключа)
+- Relationships: `protocols` → `ServerProtocol`, `connections` → `UserConnection` (cascade delete)
 
-**`users[]`** (дефолтный admin `app.py:1780-1789`):
-- `id` (UUID), `username`, `password_hash` (PBKDF2, см. §5), `role` (`admin`|`support`|`user`), `enabled`, `created_at`
-- Шеринг: `share_enabled`, `share_token`, `share_password_hash` (nullable)
-- Трафик: `traffic_reset_strategy` (`never`|`daily`|...), `traffic_used`, `traffic_total`, `last_reset_at`, `expiration_date`
-- Опционально: `telegramId`, `email`, `description`, `traffic_limit`, `remnawave_uuid`
+**`ServerProtocol`** (таблица `server_protocols`):
+- `id` (int, PK autoincrement), `server_id` (FK → servers, cascade)
+- `protocol_type` (str, ключ вида `awg2`, `xray__2`)
+- `installed`, `port`, `base_protocol`, `instance`, `display_name`, `container_name`
+- `extra_params` (JSON): `{"awg_params": {...}, "settings": {...}}` — протоколо-специфичные данные (AWG-параметры, AdGuard mode/web_port, Nginx domain/email)
 
-**`user_connections[]`** (запись через `routers/connections.py`):
-- `id` (UUID), `user_id`, `server_id` (int-индекс в `servers`), `protocol`, `client_id` (протоколо-специфичный), `name`, `created_at`, `last_bytes`
+**`UserConnection`** (таблица `user_connections`):
+- `id` (UUID, PK), `user_id` (FK → users, cascade), `server_id` (FK → servers, cascade)
+- `protocol`, `client_id` (протоколо-специфичный), `name`, `created_at`, `last_bytes` (BigInteger)
+- Relationships: `user` → User, `server` → Server
 
-**`api_tokens[]`** (запись через `routers/api_tokens.py`):
-- `id` (UUID), `name`, `token_hash` (SHA-256, никогда сырой), `token_prefix`, `user_id`, `created_at`, `last_used_at`
+**`ApiToken`** (таблица `api_tokens`):
+- `id` (UUID, PK), `name`, `token_hash` (SHA-256, никогда сырой), `token_prefix`
+- `user_id` (FK → users, cascade), `created_at`, `last_used_at`
+- Relationship: `user` → User
 
-**`settings`**:
-- `appearance` `{title, logo, subtitle}`
-- `sync` `{remnawave_url, remnawave_api_key, remnawave_sync, remnawave_sync_users, remnawave_create_conns, remnawave_server_id, remnawave_protocol}`
-- `ssl` `{enabled, domain, cert_path, key_path, cert_text, key_text, panel_port}` (миграция `app.py:1829-1841`)
-- `captcha` `{enabled}`
-- `telegram` `{token, enabled}`
+**`Setting`** (таблица `settings`, key-value):
+- `key` (str, PK — например `"ssl"`, `"appearance"`, `"telegram"`)
+- `value` (JSON)
+- CRUD через `database/crud.py`: `get_setting(db, key, default)`, `set_setting(db, key, value)`
+
+### Репозитории (`database/repositories.py`, 288 строк)
+
+Содержат высокоуровневые операции над моделями: `UserRepository` (ensure_default_admin, CRUD пользователей), `ServerRepository` (CRUD серверов) и др.
 
 ### Шифрование at rest
 
-- **Fernet** применяется только к `servers[].password` и `servers[].private_key` (см. §8). Формат хранения — `"v1:<fernet-token>"`. Записи — в `routers/servers.py:159-160` (добавление/редактирование сервера).
+- **Fernet** применяется только к `Server.password` и `Server.private_key` (см. §8). Формат хранения — `"v1:<fernet-token>"`.
 - Хэши паролей пользователей — PBKDF2 (не Fernet) — см. §5.
-- Секреты API-токенов — **SHA-256 хэш** (односторонний), не шифруются — `app.py:1091-1093`.
-- Бэкапы `data.json` наследуют шифрование (`routers/settings.py`) — никогда не plaintext.
+- Секреты API-токенов — **SHA-256 хэш** (односторонний), не шифруются.
+- Бэкапы делаются через JSON-экспорт из БД, шифрованные поля остаются в `v1:` формате — никогда не plaintext.
 
-### Стартовые миграции (`_startup`, `app.py:1775-1856`)
+### Стартовые миграции (`_startup`)
 
-Первой строкой `_startup` вызывает `_maybe_migrate_legacy_data_file()` (`app.py:1737-1773`) — one-time rescue старого `data.json` из каталога приложения в volume-backed путь (без overwrite существующего файла). Затем: создаёт дефолтного `admin/admin`, если `users` пуст; бэкфиллит `share_*`, `traffic_*`, `last_reset_at`, `expiration_date`; инициализирует `api_tokens`; мигрирует блок SSL; запускает фоновые задачи и Telegram-бота (`app.py:1848-1856`).
+`_startup()` в `app.py` вызывает `_maybe_migrate_legacy_data_file()` (one-time rescue старого `data.json` → volume-backed путь), затем через `database/repositories.py` создаёт дефолтного `admin/admin`, инициализирует настройки, запускает фоновые задачи и Telegram-бота.
+
+### Переход от `data.json` к БД
+
+- `get_ssh(server, db)` — поддерживает и dict (legacy), и ORM-модель Server.
+- `_check_admin(db, request)` — теперь принимает `AsyncSession`.
+- `get_panel_local_url(db, request)` / `get_panel_tunnel_target_url(db)` — читают SSL-настройки через `get_setting(db, 'ssl')`.
+- Роутеры используют `Depends(get_db)` для получения сессии БД.
 
 ## 4. Цепочка middleware
 
@@ -170,11 +175,11 @@ add TrustedHostMiddleware        # app.py:141-142  (outermost; в dev пропу
 ### Роли и авторизация
 
 - Три роли: `admin`, `support`, `user`.
-- `_check_admin(request)` (`app.py:1460-1492`) — центральный гейт, ~50 вызовов. Логика:
+- `_check_admin(db, request)` — центральный гейт, принимает `AsyncSession` (БД) и `Request`. Логика:
   1. Сессионный пользователь через `get_current_user`; если role ∈ `('admin','support')` → вернуть user.
   2. Иначе пробовать `Authorization: Bearer <token>`: резолв через `_resolve_api_token`; если владелец enabled и admin/support — вернуть его. Best-effort обновление `last_used_at`.
   3. Иначе `None` → вызывающий возвращает `403 Forbidden`.
-- Роуты защищаются `if not _check_admin(request): return JSONResponse({'error':'Forbidden'}, status_code=403)`.
+- Роуты защищаются `if not await _check_admin(db, request): return JSONResponse({'error':'Forbidden'}, status_code=403)`.
 - Эндпоинты обычных пользователей (`/api/my/*`) используют `get_current_user` напрямую и проверяют владение (`routers/users.py`).
 
 ### API-токены (`app.py:1086-1142`)
@@ -352,22 +357,22 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
 
 Порядок тегов OpenAPI кураторски задан в `OPENAPI_TAGS` (`app.py:68-79`) и драйвит `/docs` и `/redoc`.
 
-## 10. Telegram-бот (`telegram_bot.py`, 1332 строки)
+## 10. Telegram-бот (`telegram_bot.py`, 1680 строк)
 
 ### Жизненный цикл
 
-- Импортирован `app.py:61` как `import telegram_bot as tg_bot`.
-- **Запускается in-process как asyncio-таск**, не отдельным процессом. Общий `data.json` через инжектированные колбэки.
-- `launch_bot(token, load_data_fn, generate_vpn_link_fn, save_data_fn=None)` (`telegram_bot.py:38-44`) — `asyncio.create_task(_run_bot(...), name="telegram_bot")`.
-- Старт из `_startup()` при `settings.telegram.enabled` и наличии токена (`app.py:1853-1856`).
-- `stop_bot()` (`telegram_bot.py:47-56`) отменяет таск; вызывается из lifespan shutdown (`app.py:2203-2206`).
+- Импортирован `app.py` как `import telegram_bot as tg_bot`.
+- **Запускается in-process как asyncio-таск**, не отдельным процессом. Работает с БД через инжектированные колбэки.
+- `launch_bot(...)` — `asyncio.create_task(_run_bot(...), name="telegram_bot")`.
+- Старт из `_startup()` при `settings.telegram.enabled` и наличии токена.
+- `stop_bot()` отменяет таск; вызывается из lifespan shutdown.
 
 ### Архитектура (без фреймворка `python-telegram-bot`)
 
 Несмотря на `python-telegram-bot==20.7` в requirements, бот использует **самописный long-polling** поверх `httpx`:
 - `TelegramAPI` (`telegram_bot.py:62-`) оборачивает `https://api.telegram.org/bot<token>/<method>` через `httpx.AsyncClient`; методы `call`, `get_updates` (long-poll, `allowed_updates=["message","callback_query"]`), `send_message`, `edit_message`.
 - `_run_bot` (`telegram_bot.py:1188`) крутит poll-loop; `_dispatch` (`telegram_bot.py:1222`) маршрутизирует апдейты.
-- Состояние передаётся **dependency injection** `load_data_fn`, `generate_vpn_link_fn`, `save_data_fn` — бот читает/пишет тот же `data.json`.
+- Состояние передаётся **dependency injection** через колбэки — бот читает/пишет данные через БД.
 
 ### Возможности
 
