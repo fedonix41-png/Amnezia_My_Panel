@@ -9,8 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-amnezia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password}
       POSTGRES_DB: ${POSTGRES_DB:-amnezia_panel}
-    ports:
-      - "5432:5432"
+    network_mode: host
     volumes:
       - amnezia_postgres_dev:/var/lib/postgresql/data
     healthcheck:

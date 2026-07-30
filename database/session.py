@@ -6,7 +6,14 @@ import config
 
 connect_args = {}
 if "postgresql" in config.DATABASE_URL:
-    connect_args["timeout"] = 5
+    if "asyncpg" in config.DATABASE_URL:
+        connect_args["timeout"] = 5
+        if "sslmode" not in config.DATABASE_URL and "ssl=" not in config.DATABASE_URL:
+            connect_args["ssl"] = False
+    elif "psycopg" in config.DATABASE_URL:
+        connect_args["connect_timeout"] = 5
+
+
 
 # Create the async engine
 engine = create_async_engine(
