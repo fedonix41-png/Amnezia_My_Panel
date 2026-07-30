@@ -135,10 +135,16 @@ async def migrate():
                     proto_record = models.ServerProtocol(server_id=server_id, protocol_type=proto_type)
                     db.add(proto_record)
                 
+                def safe_int(v):
+                    try:
+                        return int(v) if v is not None and str(v).strip() else None
+                    except ValueError:
+                        return None
+                
                 proto_record.installed = p_info.get("installed", True)
-                proto_record.port = p_info.get("port")
+                proto_record.port = safe_int(p_info.get("port"))
                 proto_record.base_protocol = p_info.get("base_protocol")
-                proto_record.instance = p_info.get("instance")
+                proto_record.instance = safe_int(p_info.get("instance"))
                 proto_record.display_name = p_info.get("display_name")
                 proto_record.container_name = p_info.get("container_name")
                 

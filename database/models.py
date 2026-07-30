@@ -9,7 +9,8 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 class Base(DeclarativeBase):
-    pass
+    def to_dict(self):
+        return {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
 
 class User(Base):
     __tablename__ = "users"
@@ -114,3 +115,5 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(255), primary_key=True)
     value: Mapped[Dict[str, Any]] = mapped_column(JSON)
+
+Connection = UserConnection

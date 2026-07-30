@@ -14,7 +14,7 @@ services:
     volumes:
       - amnezia_postgres_dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-amnezia}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-amnezia}", "-d", "${POSTGRES_DB:-amnezia_panel}"]
       interval: 10s
       timeout: 5s
       retries: 5

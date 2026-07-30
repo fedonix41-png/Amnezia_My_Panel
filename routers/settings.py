@@ -325,11 +325,11 @@ async def api_backup_download(request: Request, db: AsyncSession = Depends(get_d
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     
     export_data = {
-        'servers': [s.__dict__ for s in (await db.execute(select(models.Server))).scalars().all()],
-        'users': [u.__dict__ for u in (await db.execute(select(models.User))).scalars().all()],
-        'connections': [c.__dict__ for c in (await db.execute(select(models.Connection))).scalars().all()],
-        'settings': [s.__dict__ for s in (await db.execute(select(models.Setting))).scalars().all()],
-        'server_protocols': [p.__dict__ for p in (await db.execute(select(models.ServerProtocol))).scalars().all()]
+        'servers': [s.to_dict() for s in (await db.execute(select(models.Server))).scalars().all()],
+        'users': [u.to_dict() for u in (await db.execute(select(models.User))).scalars().all()],
+        'connections': [c.to_dict() for c in (await db.execute(select(models.Connection))).scalars().all()],
+        'settings': [s.to_dict() for s in (await db.execute(select(models.Setting))).scalars().all()],
+        'server_protocols': [p.to_dict() for p in (await db.execute(select(models.ServerProtocol))).scalars().all()]
     }
     for k in export_data:
         for item in export_data[k]:

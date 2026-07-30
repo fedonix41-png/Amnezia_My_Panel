@@ -160,6 +160,25 @@ BIN_DIR = os.environ.get('TUNNEL_BIN_DIR', os.path.join(application_path, 'bin')
 TUNNEL_STATE_FILE = os.environ.get('TUNNEL_STATE_FILE', os.path.join(application_path, 'tunnels_state.json'))
 
 
+def _maybe_migrate_legacy_data_file():
+    """One-time rescue of data.json from the legacy application-directory path."""
+    if DATA_FILE == _LEGACY_DATA_FILE:
+        return
+    if os.path.exists(DATA_FILE):
+        return
+    if not os.path.exists(_LEGACY_DATA_FILE):
+        return
+    try:
+        if os.path.getsize(_LEGACY_DATA_FILE) == 0:
+            return
+        os.makedirs(os.path.dirname(DATA_FILE) or '.', exist_ok=True)
+        shutil.copy2(_LEGACY_DATA_FILE, DATA_FILE)
+        logger.warning("Migrated existing data.json from legacy path %s to %s.", _LEGACY_DATA_FILE, DATA_FILE)
+    except Exception as e:
+        logger.error("Failed to migrate legacy data.json (%s -> %s): %s", _LEGACY_DATA_FILE, DATA_FILE, e)
+
+
+
 class TunnelRuntime:
     def __init__(self):
         self.process = None
@@ -1703,39 +1722,28 @@ class TunnelStartRequest(BaseModel):
 # ======================== Startup ========================
 
 async def _startup():
-    from database.session import async_session
-    from database import models
-    from sqlalchemy import select
-    import uuid
-    from datetime import datetime
-    import secrets
+    from database.session import engine, async_session
+    from database.models import Base
+    from database.repositories import UserRepository, SettingRepository
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as e:
+        logger.error(
+            "Could not connect to database (%s).\n"
+            "If using PostgreSQL in dev mode, make sure the container is running:\n"
+            "    docker compose -f docker-compose.dev.yml up -d\n"
+            "Or set DATABASE_URL=sqlite+aiosqlite:///app.db in your .env for local SQLite.",
+            e
+        )
+        raise e
 
     async with async_session() as db:
-        # Default admin
-        stmt = select(models.User).where(models.User.username == 'admin')
-        res = await db.execute(stmt)
-        if not res.scalars().first():
-            db.add(models.User(
-                id=str(uuid.uuid4()),
-                username='admin',
-                password_hash=hash_password('admin'),
-                role='admin',
-                enabled=True,
-                created_at=datetime.now()
-            ))
-            logger.info("Default admin created (admin / admin)")
+        await UserRepository.ensure_default_admin(db)
         
-        # SSL settings
-        stmt = select(models.Setting).where(models.Setting.key == 'settings')
-        res = await db.execute(stmt)
-        setting = res.scalars().first()
-        if not setting:
-            setting = models.Setting(key='settings', value={})
-            db.add(setting)
-        
-        settings_dict = setting.value or {}
-        ssl_conf = settings_dict.get('ssl')
-        if not ssl_conf:
+        settings_dict = await SettingRepository.get(db, 'settings', default={})
+        if 'ssl' not in settings_dict:
             settings_dict['ssl'] = {
                 'enabled': False,
                 'domain': '',
@@ -1745,12 +1753,8 @@ async def _startup():
                 'key_text': '',
                 'panel_port': 5000
             }
-            setting.value = settings_dict
-            from sqlalchemy.orm.attributes import flag_modified
-            flag_modified(setting, "value")
+            await SettingRepository.set(db, 'settings', settings_dict)
             logger.info("Migrated SSL settings")
-
-        await db.commit()
 
         # Telegram
         tg_cfg = settings_dict.get('telegram', {})
@@ -2103,14 +2107,17 @@ app.router.lifespan_context = _app_lifespan
 
 if __name__ == '__main__':
     async def _get_ssl_conf():
-        from database.session import async_session
-        from database.models import Setting
-        from sqlalchemy import select
-        async with async_session() as db:
-            res = await db.execute(select(Setting).where(Setting.key == 'ssl'))
-            setting = res.scalars().first()
-            return setting.value if setting and setting.value else {}
-            
+        try:
+            from database.session import async_session
+            from database.repositories import SettingRepository
+            async with asyncio.timeout(3.0):
+                async with async_session() as db:
+                    settings = await SettingRepository.get(db, 'settings', default={})
+                    return settings.get('ssl', {})
+        except Exception as e:
+            logger.warning("Could not fetch SSL config from DB (%s), proceeding with default SSL settings.", e)
+            return {}
+
     ssl_conf = asyncio.run(_get_ssl_conf())
     
     cert_file = ssl_conf.get('cert_path')

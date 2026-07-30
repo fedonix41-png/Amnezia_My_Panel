@@ -4,11 +4,16 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 import config
 
+connect_args = {}
+if "postgresql" in config.DATABASE_URL:
+    connect_args["timeout"] = 5
+
 # Create the async engine
 engine = create_async_engine(
     config.DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
+    connect_args=connect_args,
 )
 
 # Create the session maker

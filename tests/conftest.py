@@ -5,11 +5,11 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault("AWP_DEV", "1")
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///file:testmemdb?mode=memory&cache=shared&uri=true"
 
 @pytest.fixture(scope="session", autouse=True)
-def set_env(tmp_path_factory):
-    db_path = tmp_path_factory.mktemp("data") / "test.db"
-    os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_path}"
+def set_env():
+    pass
 
 import pytest_asyncio
 
@@ -17,8 +17,12 @@ import pytest_asyncio
 async def db_setup():
     from database.session import engine
     from database.models import Base
+    from database.repositories import UserRepository
+    from database.session import async_session
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    async with async_session() as session:
+        await UserRepository.ensure_default_admin(session)
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -29,4 +33,5 @@ def app_client(db_setup):
     from fastapi.testclient import TestClient
     with TestClient(_app.app, raise_server_exceptions=False) as c:
         yield c
+
 

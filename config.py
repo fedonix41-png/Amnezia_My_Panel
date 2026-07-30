@@ -153,5 +153,9 @@ BACKUP_KEEP_COUNT = max(1, int(os.environ.get("BACKUP_KEEP_COUNT", "14") or 14))
 # ---------------------------------------------------------------------------
 # Database
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://amnezia:secure_password@localhost:5432/amnezia_panel")
+# In AWP_DEV mode, if DATABASE_URL is not explicitly set, default to SQLite
+# so `python app.py` starts instantly out of the box without external dependencies.
+_default_db_url = "sqlite+aiosqlite:///app.db" if AWP_DEV else "postgresql+asyncpg://amnezia:secure_password@127.0.0.1:5432/amnezia_panel"
+DATABASE_URL = os.environ.get("DATABASE_URL", _default_db_url)
+
 

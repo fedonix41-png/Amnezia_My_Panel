@@ -362,14 +362,15 @@ async def api_check_server(request: Request, server_id: int, db: AsyncSession = 
             if db_proto:
                 if not merged.get('port') and db_proto.port:
                     merged['port'] = db_proto.port
-                if db_proto.awg_params and not merged.get('awg_params'):
-                    merged['awg_params'] = db_proto.awg_params
+                extra_params = db_proto.extra_params or {}
+                if extra_params.get('awg_params') and not merged.get('awg_params'):
+                    merged['awg_params'] = extra_params['awg_params']
                 merged['base_protocol'] = db_proto.base_protocol or app_module.protocol_base(proto)
                 merged['instance'] = db_proto.instance or app_module.protocol_instance(proto)
                 merged['display_name'] = db_proto.display_name or app_module.protocol_display_name(proto)
                 merged['container_name'] = db_proto.container_name or app_module.protocol_container_name(proto)
                 
-                settings = db_proto.settings or {}
+                settings = extra_params.get('settings', {})
                 if app_module.protocol_base(proto) == 'adguard':
                     for key in ('web_port', 'mode', 'internal_ip', 'expose_web'):
                         if settings.get(key) is not None:
@@ -417,13 +418,11 @@ async def api_check_server(request: Request, server_id: int, db: AsyncSession = 
                     new_proto = models.ServerProtocol(
                         server_id=server.id,
                         protocol_type=proto,
-                        port=result.get('port', '55424'),
-                        awg_params=result.get('awg_params', {}),
+                        port=int(result.get('port', 55424)) if result.get('port') else 55424,
                         base_protocol=app_module.protocol_base(proto),
                         instance=app_module.protocol_instance(proto),
                         display_name=app_module.protocol_display_name(proto),
-                        container_name=app_module.protocol_container_name(proto),
-                        settings={}
+                        container_name=app_module.protocol_container_name(proto)
                     )
                     settings = {}
                     if app_module.protocol_base(proto) == 'adguard':
@@ -439,7 +438,10 @@ async def api_check_server(request: Request, server_id: int, db: AsyncSession = 
                             'email': result.get('email'),
                             'site_url': result.get('site_url'),
                         })
-                    new_proto.settings = settings
+                    new_proto.extra_params = {
+                        "awg_params": result.get('awg_params', {}),
+                        "settings": settings
+                    }
                     db.add(new_proto)
                     db_protocols[proto] = new_proto
                     changed = True

@@ -61,9 +61,9 @@ async def server_detail(request: Request, server_id: int, db: AsyncSession = Dep
         
     stmt_users = select(models.User)
     res_users = await db.execute(stmt_users)
-    users_list = [u.__dict__ for u in res_users.scalars().all()]
+    users_list = [u.to_dict() for u in res_users.scalars().all()]
     
-    return await app_module.tpl(db, request, 'server.html', server=server.__dict__, server_id=server_id, users=users_list)
+    return await app_module.tpl(db, request, 'server.html', server=server.to_dict(), server_id=server_id, users=users_list)
 
 
 @router.get('/users', response_class=HTMLResponse)
@@ -78,13 +78,13 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
     res_users = await db.execute(stmt_users)
     users_list = []
     for u in res_users.scalars().all():
-        u_dict = u.__dict__.copy()
+        u_dict = u.to_dict().copy()
         u_dict['connections_count'] = len(u.connections)
         users_list.append(u_dict)
         
     stmt_servers = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
     res_servers = await db.execute(stmt_servers)
-    servers = [s.__dict__ for s in res_servers.scalars().all()]
+    servers = [s.to_dict() for s in res_servers.scalars().all()]
     
     return await app_module.tpl(db, request, 'users.html', users=users_list, servers=servers)
 

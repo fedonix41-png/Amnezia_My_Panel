@@ -149,27 +149,31 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
         proto_record = models.ServerProtocol(
             server_id=server.id,
             protocol_type=install_protocol,
-            port=str(req.port),
-            awg_params=result.get('awg_params', {}),
+            port=int(req.port) if req.port else None,
             base_protocol=install_base,
             instance=app_module.protocol_instance(install_protocol),
             display_name=app_module.protocol_display_name(install_protocol),
-            container_name=app_module.protocol_container_name(install_protocol),
-            settings={}
+            container_name=app_module.protocol_container_name(install_protocol)
         )
+        settings = {}
         if install_base == 'adguard':
-            proto_record.settings.update({
+            settings.update({
                 'mode': result.get('mode'),
                 'internal_ip': result.get('internal_ip'),
                 'web_port': result.get('web_port'),
                 'expose_web': result.get('expose_web')
             })
         if install_base == 'nginx':
-            proto_record.settings.update({
+            settings.update({
                 'domain': result.get('domain'),
                 'email': result.get('email'),
                 'site_url': result.get('site_url')
             })
+            
+        proto_record.extra_params = {
+            "awg_params": result.get('awg_params', {}),
+            "settings": settings
+        }
             
         if install_protocol in db_protocols:
             await db.delete(db_protocols[install_protocol])

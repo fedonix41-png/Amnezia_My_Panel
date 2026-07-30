@@ -12,6 +12,8 @@ that contract.
 
 import hashlib
 import json
+import pytest
+
 
 
 def _login_as_admin(client):
@@ -202,23 +204,21 @@ class TestTokenOwnerState:
     """A token's authority is derived from its owner. If the owner is later
     disabled or demoted, the token must stop working immediately."""
 
-    def test_disabled_owner_token_stops_working(self, app_client, data_file):
+    @pytest.mark.asyncio
+    async def test_disabled_owner_token_stops_working(self, app_client):
         import app as appmod
+        from database.session import async_session
+        from database.repositories import UserRepository
 
         appmod.limiter.reset()
         _login_as_admin(app_client)
         raw, _ = _create_token(app_client, name="ci")
         _drop_session(app_client)
 
-        # Disable the token's owner directly in the backing data file, then
-        # force the next request to re-read it.
-        with open(data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        for u in data.get("users", []):
-            if u["username"] == "admin":
-                u["enabled"] = False
-        with open(data_file, "w", encoding="utf-8") as f:
-            json.dump(data, f)
+        async with async_session() as db:
+            admin = await UserRepository.get_by_username(db, "admin")
+            if admin:
+                await UserRepository.update(db, admin.id, {"enabled": False})
 
         r = app_client.get(
             "/api/settings/tokens",
@@ -226,27 +226,38 @@ class TestTokenOwnerState:
         )
         assert r.status_code == 403
 
-    def test_downgraded_owner_token_stops_working(self, app_client, data_file):
+        async with async_session() as db:
+            admin = await UserRepository.get_by_username(db, "admin")
+            if admin:
+                await UserRepository.update(db, admin.id, {"enabled": True})
+
+    @pytest.mark.asyncio
+    async def test_downgraded_owner_token_stops_working(self, app_client):
         import app as appmod
+        from database.session import async_session
+        from database.repositories import UserRepository
 
         appmod.limiter.reset()
         _login_as_admin(app_client)
         raw, _ = _create_token(app_client, name="ci")
         _drop_session(app_client)
 
-        with open(data_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        for u in data.get("users", []):
-            if u["username"] == "admin":
-                u["role"] = "user"
-        with open(data_file, "w", encoding="utf-8") as f:
-            json.dump(data, f)
+        async with async_session() as db:
+            admin = await UserRepository.get_by_username(db, "admin")
+            if admin:
+                await UserRepository.update(db, admin.id, {"role": "user"})
 
         r = app_client.get(
             "/api/settings/tokens",
             headers={"Authorization": f"Bearer {raw}"},
         )
         assert r.status_code == 403
+
+        async with async_session() as db:
+            admin = await UserRepository.get_by_username(db, "admin")
+            if admin:
+                await UserRepository.update(db, admin.id, {"role": "admin"})
+
 
 
 class TestTokenHashing:
