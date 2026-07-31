@@ -12,6 +12,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database.session import get_db
+from database.repositories import ServerRepository
 from database import models
 
 router = APIRouter(tags=["Servers"])
@@ -88,7 +89,7 @@ async def api_edit_server(request: Request, server_id: int, req: EditServerReque
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
 
@@ -102,8 +103,8 @@ async def api_edit_server(request: Request, server_id: int, req: EditServerReque
         elif req.password:
             plain_pass, plain_key = req.password, ''
         else:
-            plain_pass = decrypt_secret(server.password or '')
-            plain_key = decrypt_secret(server.private_key or '')
+            plain_pass = server.plain_password
+            plain_key = server.plain_private_key
 
         if not plain_pass and not plain_key:
             return JSONResponse({'error': 'Password or SSH key is required'}, status_code=400)
@@ -138,7 +139,7 @@ async def api_edit_server(request: Request, server_id: int, req: EditServerReque
 async def api_server_ping(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    server = await db.get(models.Server, server_id)
+    server = await ServerRepository.get_by_id(db, server_id)
     if not server:
         return JSONResponse({'error': 'Server not found'}, status_code=404)
     host = server.host
@@ -166,7 +167,7 @@ async def api_server_ping(request: Request, server_id: int, db: AsyncSession = D
 async def api_reset_server_fingerprint(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
-    server = await db.get(models.Server, server_id)
+    server = await ServerRepository.get_by_id(db, server_id)
     if not server:
         return JSONResponse({'error': 'Server not found'}, status_code=404)
     server.host_fingerprint = None
@@ -179,9 +180,7 @@ async def api_reorder_servers(request: Request, req: ReorderServersRequest, db: 
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     
-    stmt = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
-    res = await db.execute(stmt)
-    servers = list(res.scalars().all())
+    servers = await ServerRepository.get_all(db)
     
     n = len(servers)
     order = req.order or []
@@ -203,7 +202,7 @@ async def api_delete_server(request: Request, server_id: int, db: AsyncSession =
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
             
@@ -219,7 +218,7 @@ async def api_reboot_server(request: Request, server_id: int, db: AsyncSession =
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
             
@@ -244,7 +243,7 @@ async def api_clear_server(request: Request, server_id: int, db: AsyncSession = 
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
             
@@ -284,7 +283,7 @@ async def api_server_stats(request: Request, server_id: int, db: AsyncSession = 
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         ssh = app_module.get_ssh(server, db)

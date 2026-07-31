@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from database.session import get_db
+from database.repositories import ServerRepository, ConnectionRepository
 from database import models
 
 router = APIRouter(tags=["Connections"])
@@ -57,7 +58,7 @@ async def api_get_connections(request: Request, server_id: int, protocol: str = 
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         ssh = app_module.get_ssh(server, db)
@@ -92,7 +93,7 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         
@@ -150,7 +151,7 @@ async def api_remove_connection(request: Request, server_id: int, req: Connectio
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         if not req.client_id:
@@ -181,7 +182,7 @@ async def api_edit_connection(request: Request, server_id: int, req: EditConnect
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         
@@ -212,7 +213,7 @@ async def api_get_connection_config(request: Request, server_id: int, req: Conne
     if not user:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         if user.role == 'user':
@@ -254,7 +255,7 @@ async def api_toggle_connection(request: Request, server_id: int, req: ToggleCon
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        server = await db.get(models.Server, server_id)
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         if not req.client_id:

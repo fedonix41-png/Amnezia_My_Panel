@@ -5,18 +5,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 async def _build_data_dict(db):
-    data = {"users": [], "servers": [], "user_connections": []}
+    data = {"users": {}, "servers": {}, "user_connections": {}}
     
     # users
     res = await db.execute(select(models.User))
     for u in res.scalars().all():
-        data["users"].append({
+        data["users"][u.id] = {
             "id": u.id,
             "username": u.username,
             "role": u.role,
             "telegramId": u.telegramId,
             "enabled": u.enabled,
-        })
+        }
         
     # servers
     res = await db.execute(select(models.Server).options(selectinload(models.Server.protocols)))
@@ -41,12 +41,12 @@ async def _build_data_dict(db):
                 "container_name": p.container_name,
                 **(p.extra_params or {})
             }
-        data["servers"].append(srv)
+        data["servers"][s.id] = srv
         
     # user_connections
     res = await db.execute(select(models.UserConnection))
     for c in res.scalars().all():
-        data["user_connections"].append({
+        data["user_connections"][c.id] = {
             "id": c.id,
             "user_id": c.user_id,
             "server_id": c.server_id,
@@ -55,7 +55,7 @@ async def _build_data_dict(db):
             "name": c.name,
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "last_bytes": c.last_bytes,
-        })
+        }
         
     return data
 
@@ -271,7 +271,7 @@ def _build_connections_keyboard(conns: list[dict], data: dict) -> dict:
     for c in conns:
         server_name = "Unknown"
         server_id = c.get("server_id")
-        for s in data.get("servers", []):
+        for s in data.get("servers", {}).values():
             if s.get("id") == server_id:
                 server_name = s.get("name") or s.get("host", "")[:20]
                 break
@@ -286,7 +286,7 @@ def _build_connections_keyboard(conns: list[dict], data: dict) -> dict:
 def _connection_lookup(data: dict, server_id: int, proto: str) -> dict:
     return {
         c.get("client_id"): c
-        for c in data.get("user_connections", [])
+        for c in data.get("user_connections", {}).values()
         if c.get("server_id") == server_id and c.get("protocol") == proto and c.get("client_id")
     }
 
@@ -317,14 +317,14 @@ def _user_label(user: dict) -> str:
 def _users_keyboard(data: dict, back_callback: str = "adm:menu") -> dict:
     rows = []
     rows.append([{"text": "➕ Create User", "callback_data": "adm:add_user"}])
-    for user_dict in data.get("users", [])[:40]:
+    for user_dict in list(data.get("users", {}).values())[:40]:
         rows.append([{"text": f"👤 {_user_label(user_dict)}", "callback_data": _ref("user", {"uid": user_dict.get("id")})}])
     rows.append([{"text": "⬅️ Back", "callback_data": back_callback}])
     return {"inline_keyboard": rows}
 
 def _assign_user_keyboard(data: dict, server_id: int, proto: str, name: str) -> dict:
     rows = [[{"text": "🚫 Do not assign", "callback_data": _ref("create_client", {"sid": server_id, "proto": proto, "name": name, "user_id": None})}]]
-    for user_dict in data.get("users", [])[:40]:
+    for user_dict in list(data.get("users", {}).values())[:40]:
         rows.append([{"text": f"👤 {_user_label(user_dict)}", "callback_data": _ref("create_client", {"sid": server_id, "proto": proto, "name": name, "user_id": user_dict.get("id")})}])
     rows.append([{"text": "❌ Cancel", "callback_data": _ref("clients", {"sid": server_id, "proto": proto})}])
     return {"inline_keyboard": rows}
@@ -342,7 +342,7 @@ def _admin_main_keyboard() -> dict:
 
 def _server_keyboard(data: dict) -> dict:
     rows = []
-    for srv in data.get("servers", []):
+    for srv in data.get("servers", {}).values():
         name = srv.get("name") or srv.get("host") or f"Server {srv.get('id')}"
         rows.append([{"text": f"🖥 {name}", "callback_data": f"srv:{srv.get('id')}"}])
     rows.append([{"text": "⬅️ Admin menu", "callback_data": "adm:menu"}])
@@ -542,7 +542,7 @@ async def _handle_start(api: TelegramAPI, msg: dict, db):
 
 async def _send_user_connections(api: TelegramAPI, chat_id: int, panel_user: dict, db, first_name: str = ""):
     data = await _build_data_dict(db)
-    conns = [c for c in data.get("user_connections", []) if c.get("user_id") == panel_user.get("id")]
+    conns = [c for c in data.get("user_connections", {}).values() if c.get("user_id") == panel_user.get("id")]
 
     if not conns:
         greeting = f"👋 Hi, <b>{_e(first_name)}</b>!\n\n" if first_name else ""
@@ -570,7 +570,7 @@ async def _handle_refresh(api: TelegramAPI, chat_id: int, message_id: int, callb
         await api.edit_message(chat_id, message_id, "❌ Access denied.")
         return
     data = await _build_data_dict(db)
-    conns = [c for c in data.get("user_connections", []) if c.get("user_id") == panel_user.get("id")]
+    conns = [c for c in data.get("user_connections", {}).values() if c.get("user_id") == panel_user.get("id")]
     if not conns:
         await api.edit_message(chat_id, message_id, "You have no connections.")
         return
@@ -629,14 +629,14 @@ async def _handle_get_config(api: TelegramAPI, chat_id: int, message_id: int, ca
         return
 
     data = await _build_data_dict(db)
-    conn = next((c for c in data.get("user_connections", []) if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
+    conn = next((c for c in data.get("user_connections", {}).values() if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
     if not conn:
         await api.send_message(chat_id, "❌ Connection not found.")
         return
 
     servers = data.get("servers", [])
     sid = conn.get("server_id")
-    if not isinstance(sid, int) or sid >= len(servers):
+    if sid not in servers:
         await api.send_message(chat_id, "❌ Server not found.")
         return
 
@@ -714,14 +714,14 @@ async def _handle_send_qr(api: TelegramAPI, chat_id: int, callback_id: str, conn
         return
 
     data = await _build_data_dict(db)
-    conn = next((c for c in data.get("user_connections", []) if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
+    conn = next((c for c in data.get("user_connections", {}).values() if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
     if not conn:
         await api.send_message(chat_id, "❌ Connection not found.")
         return
 
     servers = data.get("servers", [])
     sid = conn.get("server_id")
-    if not isinstance(sid, int) or sid >= len(servers):
+    if sid not in servers:
         await api.send_message(chat_id, "❌ Server not found.")
         return
 
@@ -783,14 +783,14 @@ async def _handle_download_conf(api: TelegramAPI, chat_id: int, callback_id: str
         return
 
     data = await _build_data_dict(db)
-    conn = next((c for c in data.get("user_connections", []) if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
+    conn = next((c for c in data.get("user_connections", {}).values() if c.get("id") == conn_id and (_is_admin(panel_user) or c.get("user_id") == panel_user.get("id"))), None)
     if not conn:
         await api.send_message(chat_id, "❌ Connection not found.")
         return
 
     servers = data.get("servers", [])
     sid = conn.get("server_id")
-    if not isinstance(sid, int) or sid >= len(servers):
+    if sid not in servers:
         await api.send_message(chat_id, "❌ Server not found.")
         return
 
@@ -951,7 +951,7 @@ async def _admin_create_user(api: TelegramAPI, chat_id: int, message_id: int, us
 
 async def _admin_toggle_user(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, enable: bool, db):
     data = await _build_data_dict(db)
-    user = next((u for u in data.get("users", []) if u.get("id") == user_id), None)
+    user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
     if not user:
         await api.edit_message(chat_id, message_id, "❌ User not found.")
         return
@@ -962,7 +962,7 @@ async def _admin_toggle_user(api: TelegramAPI, chat_id: int, message_id: int, us
 
 async def _admin_confirm_delete_user(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, db):
     data = await _build_data_dict(db)
-    user = next((u for u in data.get("users", []) if u.get("id") == user_id), None)
+    user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
     if not user:
         await api.edit_message(chat_id, message_id, "❌ User not found.")
         return
@@ -983,18 +983,18 @@ async def _admin_confirm_delete_user(api: TelegramAPI, chat_id: int, message_id:
 
 async def _admin_delete_user(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, db):
     data = await _build_data_dict(db)
-    data["users"] = [u for u in data.get("users", []) if u.get("id") != user_id]
+    data["users"] = [u for u in data.get("users", {}).values() if u.get("id") != user_id]
     db.commit()
     await _admin_users(api, chat_id, message_id, db)
 
 
 async def _admin_user_detail(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, db):
     data = await _build_data_dict(db)
-    user = next((u for u in data.get("users", []) if u.get("id") == user_id), None)
+    user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
     if not user:
         await api.edit_message(chat_id, message_id, "❌ User not found.", reply_markup={"inline_keyboard": [[{"text": "⬅️ Users", "callback_data": "adm:users"}]]})
         return
-    conns = [c for c in data.get("user_connections", []) if c.get("user_id") == user_id]
+    conns = [c for c in data.get("user_connections", {}).values() if c.get("user_id") == user_id]
     enabled = user.get("enabled", True)
     lines = [
         f"👤 <b>{_e(user.get('username'))}</b>",
@@ -1016,7 +1016,7 @@ async def _admin_user_detail(api: TelegramAPI, chat_id: int, message_id: int, us
     for c in conns[:20]:
         sid = c.get("server_id")
         server_name = "Unknown"
-        if isinstance(sid, int) and sid < len(servers):
+        if sid in servers:
             server_name = servers[sid].get("name") or servers[sid].get("host") or "Unknown"
         rows.append([{"text": f"🔐 {c.get('name', 'Connection')} · {c.get('protocol', '').upper()} · {server_name}", "callback_data": f"cfg:{c.get('id')}"}])
     rows.append([{"text": "⬅️ Users", "callback_data": "adm:users"}])
@@ -1028,7 +1028,7 @@ async def _admin_user_detail(api: TelegramAPI, chat_id: int, message_id: int, us
 async def _admin_server_detail(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, db):
     data = await _build_data_dict(db)
     servers = data.get("servers", [])
-    if server_id < 0 or server_id >= len(servers):
+    if server_id not in servers:
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return
     server = await _refresh_server_protocol_statuses_async(servers[server_id])
@@ -1045,7 +1045,7 @@ async def _admin_server_detail(api: TelegramAPI, chat_id: int, message_id: int, 
 async def _admin_protocol_detail(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, db):
     data = await _build_data_dict(db)
     servers = data.get("servers", [])
-    if server_id < 0 or server_id >= len(servers):
+    if server_id not in servers:
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return
     server = await _refresh_server_protocol_statuses_async(servers[server_id])
@@ -1271,7 +1271,7 @@ async def _admin_clients(api: TelegramAPI, chat_id: int, message_id: int, server
             return
         rows = []
         conn_by_client = _connection_lookup(data, server_id, proto)
-        users_by_id = {u.get("id"): u for u in data.get("users", [])}
+        users_by_id = {u.get("id"): u for u in data.get("users", {}).values()}
         for c in clients[:40]:
             client_id = c.get("clientId") or c.get("client_id") or c.get("id") or ""
             conn = conn_by_client.get(client_id)
@@ -1368,7 +1368,7 @@ async def _admin_create_client(api: TelegramAPI, chat_id: int, message_id: int, 
         client_id = result.get("client_id") or result.get("clientId")
         assigned_user = None
         if user_id:
-            assigned_user = next((u for u in data.get("users", []) if u.get("id") == user_id), None)
+            assigned_user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
         if user_id and client_id:
             data.setdefault("user_connections", []).append({
                 "id": str(uuid.uuid4()),
@@ -1441,10 +1441,7 @@ async def _admin_remove_client(api: TelegramAPI, chat_id: int, message_id: int, 
             _manager_call(manager, "remove_client", proto, client_id)
         finally:
             ssh.disconnect()
-        data["user_connections"] = [
-            c for c in data.get("user_connections", [])
-            if not (c.get("server_id") == server_id and c.get("protocol") == proto and c.get("client_id") == client_id)
-        ]
+        pass # We don't need to rebuild data locally
         db.commit()
 
     try:

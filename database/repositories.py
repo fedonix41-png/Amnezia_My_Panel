@@ -109,7 +109,7 @@ class ServerRepository:
         res = await db.execute(stmt)
         server = res.scalar_one_or_none()
         if server:
-            ServerRepository._decrypt_secrets(server)
+            pass
         return server
 
     @staticmethod
@@ -118,7 +118,7 @@ class ServerRepository:
         res = await db.execute(stmt)
         servers = list(res.scalars().all())
         for s in servers:
-            ServerRepository._decrypt_secrets(s)
+            pass
         return servers
 
     @staticmethod
@@ -142,7 +142,7 @@ class ServerRepository:
             await db.commit()
             await db.refresh(server)
 
-        ServerRepository._decrypt_secrets(server)
+        
         return server
 
     @staticmethod
@@ -160,7 +160,7 @@ class ServerRepository:
                 setattr(server, k, v)
         await db.commit()
         await db.refresh(server)
-        ServerRepository._decrypt_secrets(server)
+        
         return server
 
     @staticmethod

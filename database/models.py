@@ -59,6 +59,21 @@ class Server(Base):
     server_info: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     host_fingerprint: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+
+    @property
+    def plain_password(self):
+        from managers.secrets import decrypt_secret
+        if not self.password: return ""
+        try: return decrypt_secret(self.password)
+        except: return ""
+
+    @property
+    def plain_private_key(self):
+        from managers.secrets import decrypt_secret
+        if not self.private_key: return ""
+        try: return decrypt_secret(self.private_key)
+        except: return ""
+
     protocols: Mapped[List["ServerProtocol"]] = relationship(back_populates="server", cascade="all, delete-orphan")
     connections: Mapped[List["UserConnection"]] = relationship(back_populates="server", cascade="all, delete-orphan")
 
