@@ -40,9 +40,14 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
     if user.role == 'user':
         return RedirectResponse(url='/my', status_code=302)
         
-    stmt_servers = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
+    stmt_servers = select(models.Server).options(selectinload(models.Server.protocols)).order_by(models.Server.display_order.asc(), models.Server.id.asc())
     res_servers = await db.execute(stmt_servers)
-    servers = [{"id": s.id, "name": s.name, "host": s.host} for s in res_servers.scalars().all()]
+    
+    servers = []
+    for s in res_servers.scalars().all():
+        s_dict = s.to_dict()
+        s_dict['protocols'] = {p.protocol_type: p.to_dict() for p in s.protocols}
+        servers.append(s_dict)
     
     return await app_module.tpl(db, request, 'index.html', servers=servers)
 
@@ -82,9 +87,13 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
         u_dict['connections_count'] = len(u.connections)
         users_list.append(u_dict)
         
-    stmt_servers = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
+    stmt_servers = select(models.Server).options(selectinload(models.Server.protocols)).order_by(models.Server.display_order.asc(), models.Server.id.asc())
     res_servers = await db.execute(stmt_servers)
-    servers = [s.to_dict() for s in res_servers.scalars().all()]
+    servers = []
+    for s in res_servers.scalars().all():
+        s_dict = s.to_dict()
+        s_dict['protocols'] = {p.protocol_type: p.to_dict() for p in s.protocols}
+        servers.append(s_dict)
     
     return await app_module.tpl(db, request, 'users.html', users=users_list, servers=servers)
 
@@ -107,7 +116,7 @@ async def my_connections_page(request: Request, db: AsyncSession = Depends(get_d
             'protocol': c.protocol,
             'client_id': c.client_id,
             'name': c.name,
-            'created_at': c.created_at,
+            'created_at': str(c.created_at) if c.created_at else '',
             'server_name': c.server.name if c.server else 'Unknown'
         })
         

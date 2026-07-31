@@ -236,11 +236,15 @@ async def _find_user(db, tg_id: str):
     if not tg_id_clean.isdigit(): return None
     stmt = select(models.User).where(models.User.telegramId == int(tg_id_clean))
     res = await db.execute(stmt)
-    return res.scalars().first()
+    user = res.scalars().first()
+    return user.to_dict() if user else None
 
 
 def _is_admin(panel_user) -> bool:
-    return panel_user is not None and str(getattr(panel_user, "role", "")).lower() == "admin"
+    if panel_user is None:
+        return False
+    role = panel_user.get("role", "") if isinstance(panel_user, dict) else getattr(panel_user, "role", "")
+    return str(role).lower() == "admin"
 
 
 def _ref(action: str, payload: dict) -> str:
@@ -261,17 +265,20 @@ def _resolve_ref(data_str: str):
     return _callback_refs.get(data_str[2:])
 
 
-def _build_connections_keyboard(conns: list[models.UserConnection]) -> dict:
+def _build_connections_keyboard(conns: list[dict], data: dict) -> dict:
     """Build inline keyboard where each button = one connection."""
     rows = []
     for c in conns:
         server_name = "Unknown"
-        if c.server:
-            server_name = c.server.name or c.server.host[:20]
-        proto = c.protocol.upper()
-        name = c.name or "Connection"
+        server_id = c.get("server_id")
+        for s in data.get("servers", []):
+            if s.get("id") == server_id:
+                server_name = s.get("name") or s.get("host", "")[:20]
+                break
+        proto = str(c.get("protocol", "")).upper()
+        name = c.get("name") or "Connection"
         label = f"🔐 {name} · {proto} · {server_name}"
-        rows.append([{"text": label, "callback_data": f"cfg:{c.id}"}])
+        rows.append([{"text": label, "callback_data": f"cfg:{c.get('id')}"}])
     rows.append([{"text": "🔄 Refresh list", "callback_data": "refresh"}])
     return {"inline_keyboard": rows}
 
@@ -297,32 +304,28 @@ def _client_display_name(client: dict, conn: Optional[dict] = None) -> str:
     )
 
 
-def _user_label(user) -> str:
-    label = user.username or str(user.id)
-    role = user.role or "user"
+def _user_label(user: dict) -> str:
+    label = user.get("username") or str(user.get("id"))
+    role = user.get("role") or "user"
     suffix = f" · {role}"
-    if getattr(user, "telegramId", None):
-        suffix += f" · tg:{user.telegramId}"
-    if getattr(user, "enabled", True) is False:
+    if user.get("telegramId"):
+        suffix += f" · tg:{user.get('telegramId')}"
+    if user.get("enabled", True) is False:
         suffix += " · disabled"
     return f"{label}{suffix}"
 
-async def _users_keyboard(db, back_callback: str = "adm:menu") -> dict:
+def _users_keyboard(data: dict, back_callback: str = "adm:menu") -> dict:
     rows = []
     rows.append([{"text": "➕ Create User", "callback_data": "adm:add_user"}])
-    stmt = select(models.User).limit(40)
-    res = await db.execute(stmt)
-    for user in res.scalars().all():
-        rows.append([{"text": f"👤 {_user_label(user)}", "callback_data": _ref("user", {"uid": user.id})}])
+    for user_dict in data.get("users", [])[:40]:
+        rows.append([{"text": f"👤 {_user_label(user_dict)}", "callback_data": _ref("user", {"uid": user_dict.get("id")})}])
     rows.append([{"text": "⬅️ Back", "callback_data": back_callback}])
     return {"inline_keyboard": rows}
 
-async def _assign_user_keyboard(db, server_id: int, proto: str, name: str) -> dict:
+def _assign_user_keyboard(data: dict, server_id: int, proto: str, name: str) -> dict:
     rows = [[{"text": "🚫 Do not assign", "callback_data": _ref("create_client", {"sid": server_id, "proto": proto, "name": name, "user_id": None})}]]
-    stmt = select(models.User).limit(40)
-    res = await db.execute(stmt)
-    for user in res.scalars().all():
-        rows.append([{"text": f"👤 {_user_label(user)}", "callback_data": _ref("create_client", {"sid": server_id, "proto": proto, "name": name, "user_id": user.id})}])
+    for user_dict in data.get("users", [])[:40]:
+        rows.append([{"text": f"👤 {_user_label(user_dict)}", "callback_data": _ref("create_client", {"sid": server_id, "proto": proto, "name": name, "user_id": user_dict.get("id")})}])
     rows.append([{"text": "❌ Cancel", "callback_data": _ref("clients", {"sid": server_id, "proto": proto})}])
     return {"inline_keyboard": rows}
 
@@ -337,13 +340,11 @@ def _admin_main_keyboard() -> dict:
     }
 
 
-async def _server_keyboard(db) -> dict:
+def _server_keyboard(data: dict) -> dict:
     rows = []
-    stmt = select(models.Server).order_by(models.Server.display_order.asc(), models.Server.id.asc())
-    res = await db.execute(stmt)
-    for srv in res.scalars().all():
-        name = srv.name or srv.host or f"Server {srv.id}"
-        rows.append([{"text": f"🖥 {name}", "callback_data": f"srv:{srv.id}"}])
+    for srv in data.get("servers", []):
+        name = srv.get("name") or srv.get("host") or f"Server {srv.get('id')}"
+        rows.append([{"text": f"🖥 {name}", "callback_data": f"srv:{srv.get('id')}"}])
     rows.append([{"text": "⬅️ Admin menu", "callback_data": "adm:menu"}])
     return {"inline_keyboard": rows}
 
@@ -1540,7 +1541,9 @@ async def _run_bot(token: str, generate_vpn_link_fn: Callable):
             for update in updates:
                 offset = update["update_id"] + 1
                 try:
-                    await _dispatch(api, update, db, generate_vpn_link_fn)
+                    from database.session import get_db_context
+                    async with get_db_context() as db:
+                        await _dispatch(api, update, db, generate_vpn_link_fn)
                 except asyncio.CancelledError:
                     return
                 except Exception as e:

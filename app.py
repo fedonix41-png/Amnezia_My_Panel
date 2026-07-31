@@ -1471,6 +1471,7 @@ async def tpl(db, request, template, **kwargs):
     from sqlalchemy import select
     res = await db.execute(select(Setting))
     settings = {s.key: s.value for s in res.scalars().all()}
+    main_settings = settings.get('settings', {})
     
     lang = request.cookies.get('lang', 'en')
     current_user = await get_current_user(db, request)
@@ -1478,9 +1479,9 @@ async def tpl(db, request, template, **kwargs):
     ctx = {
         'request': request,
         'current_user': current_user,
-        'site_settings': settings.get('appearance', {}),
-        'captcha_settings': settings.get('captcha', {}),
-        'telegram_settings': settings.get('telegram', {}),
+        'site_settings': main_settings.get('appearance', {}),
+        'captcha_settings': main_settings.get('captcha', {}),
+        'telegram_settings': main_settings.get('telegram', {}),
         'bot_running': tg_bot.is_running(),
         'lang': lang,
         '_': lambda text_id: _t(text_id, lang),

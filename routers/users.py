@@ -10,7 +10,7 @@ from pydantic import BaseModel
 import app as app_module
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, cast, String
 from sqlalchemy.orm import selectinload
 from database.session import get_db
 from database import models
@@ -77,7 +77,7 @@ async def api_list_users(request: Request, search: str = '', page: int = 1, size
         stmt = stmt.where(or_(
             func.lower(models.User.username).like(search_term),
             func.lower(models.User.email).like(search_term),
-            func.lower(models.User.telegramId).like(search_term)
+            func.lower(cast(models.User.telegramId, String)).like(search_term)
         ))
         
     total_res = await db.execute(select(func.count()).select_from(stmt.subquery()))

@@ -103,7 +103,7 @@ async def api_tunnels_status(request: Request, db: AsyncSession = Depends(get_db
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     return {
-        'local_server': app_module.get_panel_local_url(request),
+        'local_server': await app_module.get_panel_local_url(db, request),
         'cloudflare': app_module.get_tunnel_status('cloudflare'),
         'ngrok': app_module.get_tunnel_status('ngrok'),
         'warp': app_module.get_warp_status(),
@@ -131,7 +131,7 @@ async def api_tunnel_start(request: Request, provider: str, payload: TunnelStart
     if provider not in app_module.TUNNEL_RUNTIMES:
         return JSONResponse({'error': 'Unsupported tunnel provider'}, status_code=400)
     try:
-        local_url = app_module.get_panel_tunnel_target_url()
+        local_url = await app_module.get_panel_tunnel_target_url(db)
         await asyncio.to_thread(app_module.start_tunnel, provider, local_url, payload.authtoken or '')
         status = await app_module.wait_for_tunnel_url(provider)
         if not status.get('running'):
