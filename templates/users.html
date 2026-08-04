@@ -131,7 +131,7 @@
                 <select class="form-select" id="newUserServer">
                     <option value="">{{ _('no_create_conn') }}</option>
                     {% for s in servers %}
-                    <option value="{{ loop.index0 }}">{{ s.name }} ({{ s.host }})</option>
+                    <option value="{{ s.id }}">{{ s.name }} ({{ s.host }})</option>
                     {% endfor %}
                 </select>
             </div>
@@ -271,7 +271,7 @@
             <label class="form-label">{{ _('server_label') }}</label>
             <select class="form-select" id="ucServer">
                 {% for s in servers %}
-                <option value="{{ loop.index0 }}">{{ s.name }} ({{ s.host }})</option>
+                <option value="{{ s.id }}">{{ s.name }} ({{ s.host }})</option>
                 {% endfor %}
             </select>
         </div>

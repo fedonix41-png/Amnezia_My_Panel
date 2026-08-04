@@ -316,7 +316,7 @@
                             <label class="form-label">{{ _('sync_server_label') }}</label>
                             <select class="form-select" name="remnawave_server_id" onchange="updateProtocolsForSync()">
                                 {% for s in servers %}
-                                <option value="{{ loop.index0 }}" {% if settings.sync.remnawave_server_id==loop.index0
+                                <option value="{{ s.id }}" {% if settings.sync.remnawave_server_id==s.id
                                     %}selected{% endif %}>{{ s.name or s.host }}</option>
                                 {% endfor %}
                             </select>
