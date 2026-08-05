@@ -134,7 +134,7 @@
         </div>
         <div class="flex gap-sm items-center">
             <div class="flex gap-sm items-center" id="serverStats" style="display:none;"></div>
-            <button class="btn btn-secondary btn-sm" onclick="checkServer()" id="checkBtn">
+            <button class="btn btn-secondary btn-sm" onclick="checkServer(true)" id="checkBtn">
                 <span id="checkBtnText">{{ _('server_check') }}</span>
                 <div class="spinner hidden" id="checkSpinner"></div>
             </button>
@@ -484,7 +484,7 @@
             {{ _('connections') }}
         </h2>
         <div class="flex gap-sm items-center">
-            <select class="form-select" id="connProtoSelect" onchange="loadConnections()"
+            <select class="form-select" id="connProtoSelect" onchange="loadConnections(true)"
                 style="width:auto; min-width:160px;">
                 <option value="awg">AmneziaWG</option>
                 <option value="awg2">AmneziaWG 2.0</option>
@@ -1017,7 +1017,7 @@
         if (!el) return;
         el.innerHTML = `
             <div class="flex" style="flex-direction: column; gap: var(--space-sm);">
-                <button class="btn btn-secondary" onclick="closeModal('managementModal'); checkServer();" style="justify-content: flex-start; padding: 12px 20px;">
+                <button class="btn btn-secondary" onclick="closeModal('managementModal'); checkServer(true);" style="justify-content: flex-start; padding: 12px 20px;">
                     <span style="font-size: 1.2rem; margin-right: 8px;">🔄</span> ${_('check_server_services')}
                 </button>
                 <button class="btn btn-warning" onclick="closeModal('managementModal'); rebootServer();" style="justify-content: flex-start; padding: 12px 20px;">
@@ -1185,9 +1185,10 @@
     }
 
     // ========== Server Stats ==========
-    async function loadServerStats() {
+    async function loadServerStats(force = false) {
         try {
-            const stats = await apiCall(`/api/servers/${SERVER_ID}/stats`, 'POST');
+            const stats = await apiCall(`/api/servers/${SERVER_ID}/stats?cached=${!force}`, 'POST');
+            if (stats.error === 'cached') return;
             const el = document.getElementById('serverStats');
             el.style.display = '';
             el.innerHTML = `
@@ -1202,16 +1203,16 @@
     }
 
     // ========== Server Check ==========
-    async function checkServer() {
+    async function checkServer(force = false) {
         setInstalledAppsLoading(true);
         const btn = document.getElementById('checkBtn');
         const text = document.getElementById('checkBtnText');
         const spinner = document.getElementById('checkSpinner');
         btn.disabled = true;
-        text.textContent = _('server_checking');
+        text.textContent = force ? _('server_checking') : _('loading');
         spinner.classList.remove('hidden');
         try {
-            const data = await apiCall(`/api/servers/${SERVER_ID}/check`, 'POST');
+            const data = await apiCall(`/api/servers/${SERVER_ID}/check?cached=${!force}`, 'POST');
             const statusDiv = document.getElementById('serverStatus');
             const badges = document.getElementById('statusBadges');
             statusDiv.classList.remove('hidden');
@@ -1255,10 +1256,11 @@
                     } else if (firstVal) {
                         protoSelect.value = firstVal;
                     }
-                    loadConnections();
+                    loadConnections(force);
                 }
             }
             updateStatusCounts(data.protocols || {});
+            loadServerStats(force);
             showToast(_('server_check_complete'), 'success');
         } catch (err) {
             showToast(_('error') + ': ' + err.message, 'error');
@@ -1582,7 +1584,7 @@
             const res = await apiCall(`/api/servers/${SERVER_ID}/container/toggle`, 'POST', { protocol: proto });
             showToast(`${name} ${res.action === 'stopped' ? _('stopped') : _('started')}`, 'success');
             // Recheck after a short delay
-            setTimeout(() => checkServer(), 1500);
+            setTimeout(() => checkServer(true), 1500);
         } catch (err) {
             showToast(_('error') + ': ' + err.message, 'error');
         }
@@ -1971,8 +1973,7 @@
             });
             if (res.status === 'success') {
                 showToast(_('socks5_settings_saved'), 'success');
-                closeModal('socks5SettingsModal');
-                setTimeout(() => checkServer(), 500);
+                setTimeout(() => checkServer(true), 800);
             } else {
                 throw new Error(res.message || res.error || 'Unknown error');
             }
@@ -1989,11 +1990,11 @@
     function selectProtocolForConns(proto) {
         document.getElementById('connectionsSection').style.display = '';
         document.getElementById('connProtoSelect').value = proto;
-        loadConnections();
+        loadConnections(true);
         document.getElementById('connectionsSection').scrollIntoView({ behavior: 'smooth' });
     }
 
-    async function loadConnections() {
+    async function loadConnections(force = false) {
         const proto = document.getElementById('connProtoSelect').value;
         const loading = document.getElementById('connectionsLoading');
         const emptyEl = document.getElementById('connectionsEmpty');
@@ -2008,7 +2009,7 @@
         emptyEl.classList.add('hidden');
         listEl.innerHTML = '';
         try {
-            const data = await apiCall(`/api/servers/${SERVER_ID}/connections?protocol=${proto}`);
+            const data = await apiCall(`/api/servers/${SERVER_ID}/connections?protocol=${proto}&cached=${!force}`, 'GET');
             loading.style.display = 'none';
             if (!data.clients || data.clients.length === 0) {
                 emptyEl.classList.remove('hidden');
@@ -2122,7 +2123,7 @@
                     generateQR(result.qr_content || result.vpn_link);
                 }
             }
-            loadConnections();
+            loadConnections(true);
         } catch (err) {
             showToast(_('error') + ': ' + err.message, 'error');
         } finally {
@@ -2184,7 +2185,7 @@
                 protocol: proto, client_id: clientId,
             });
             showToast(_('connection_deleted'), 'success');
-            loadConnections();
+            loadConnections(true);
         } catch (err) {
             showToast(_('error') + ': ' + err.message, 'error');
         }
@@ -2246,7 +2247,7 @@
                 protocol: proto, client_id: clientId, enable: enable,
             });
             showToast(enable ? _('connection_enabled') : _('connection_disabled'), 'success');
-            loadConnections();
+            loadConnections(true);
         } catch (err) {
             showToast(_('error') + ': ' + err.message, 'error');
         }

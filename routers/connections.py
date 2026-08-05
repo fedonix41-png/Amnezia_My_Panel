@@ -52,27 +52,75 @@ class ToggleConnectionRequest(BaseModel):
 
 
 @router.get('/api/servers/{server_id}/connections')
-async def api_get_connections(request: Request, server_id: int, protocol: str = Query(default='awg'), db: AsyncSession = Depends(get_db)):
+async def api_get_connections(request: Request, server_id: int, protocol: str = Query(default='awg'), cached: bool = False, db: AsyncSession = Depends(get_db)):
     if not protocol:
         protocol = 'awg'
-    if not await app_module._check_admin(db, request):
+    admin_user = await app_module._check_admin(db, request)
+    if not admin_user:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
-        ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, protocol)
-        clients = app_module._manager_call(manager, 'get_clients', protocol)
-        ssh.disconnect()
-
         stmt = select(models.Connection).where(
             models.Connection.server_id == server_id,
             models.Connection.protocol == protocol
         ).options(selectinload(models.Connection.user))
         res = await db.execute(stmt)
         user_conns = list(res.scalars().all())
+
+        if cached:
+            clients = []
+            for uc in user_conns:
+                clients.append({
+                    'clientId': uc.client_id,
+                    'userData': {
+                        'clientName': uc.name,
+                        'creationDate': uc.created_at.isoformat() if uc.created_at else None,
+                        'latestHandshake': '',
+                        'dataReceived': '',
+                        'dataSent': '',
+                        'enabled': True,
+                    },
+                    'assigned_user': uc.user.username if uc.user else None,
+                    'assigned_user_id': uc.user_id if uc.user else None
+                })
+            return {'clients': clients}
+
+        ssh = app_module.get_ssh(server, db)
+        ssh.connect()
+        manager = app_module.get_protocol_manager(ssh, protocol)
+        clients = app_module._manager_call(manager, 'get_clients', protocol)
+        ssh.disconnect()
+
+        existing_cids = {uc.client_id for uc in user_conns}
+        live_cids = {client.get('clientId') for client in clients if client.get('clientId')}
+        
+        new_conns = []
+        for client in clients:
+            cid = client.get('clientId')
+            if cid and cid not in existing_cids:
+                user_data = client.get('userData', {})
+                name = user_data.get('clientName') or cid
+                new_conn = models.Connection(
+                    server_id=server_id,
+                    user_id=admin_user.id,
+                    protocol=protocol,
+                    client_id=cid,
+                    name=name
+                )
+                db.add(new_conn)
+                new_conns.append(new_conn)
+                existing_cids.add(cid)
+        
+        stale_conns = [uc for uc in user_conns if uc.client_id not in live_cids]
+        for stale in stale_conns:
+            await db.delete(stale)
+            user_conns.remove(stale)
+        
+        if new_conns or stale_conns:
+            await db.commit()
+            user_conns.extend(new_conns)
 
         for client in clients:
             cid = client.get('clientId', '')

@@ -478,9 +478,11 @@
         const protoSelect = document.getElementById('syncProtocolSelect');
         protoSelect.innerHTML = '';
 
-        if (serverIdx === '' || !serversData[serverIdx]) return;
+        if (serverIdx === '') return;
+        const server = serversData.find(s => s.id.toString() === serverIdx.toString());
+        if (!server) return;
 
-        const protocols = serversData[serverIdx].protocols || {};
+        const protocols = server.protocols || {};
         let count = 0;
 
         for (const [key, info] of Object.entries(protocols)) {

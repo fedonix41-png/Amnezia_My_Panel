@@ -48,7 +48,8 @@ async def api_captcha(request: Request):
 @router.post('/api/auth/login')
 @app_module.limiter.limit(config.LOGIN_RATE_LIMIT)
 async def api_login(request: Request, req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    captcha_settings = await get_setting(db, 'captcha', {})
+    main_settings = await get_setting(db, 'settings', {})
+    captcha_settings = main_settings.get('captcha', {})
     if captcha_settings.get('enabled') is True:
         answer = request.session.get('captcha_answer')
         lang = request.cookies.get('lang', 'ru')

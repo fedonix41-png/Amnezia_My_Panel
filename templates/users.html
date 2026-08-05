@@ -592,7 +592,8 @@
             return;
         }
 
-        const server = serversData[serverId];
+        const server = serversData.find(s => s.id.toString() === serverId.toString());
+        if (!server) return;
         const protocols = server.protocols || {};
         let count = 0;
 

@@ -285,9 +285,13 @@ rm -rf /opt/amnezia
 
 
 @router.post('/api/servers/{server_id}/stats')
-async def api_server_stats(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
+async def api_server_stats(request: Request, server_id: int, cached: bool = False, db: AsyncSession = Depends(get_db)):
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
+    
+    if cached:
+        return {'alive': True, 'error': 'cached'}
+
     try:
         server = await ServerRepository.get_by_id(db, server_id)
         if not server:
@@ -337,7 +341,7 @@ async def api_server_stats(request: Request, server_id: int, db: AsyncSession = 
 
 
 @router.post('/api/servers/{server_id}/check')
-async def api_check_server(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
+async def api_check_server(request: Request, server_id: int, cached: bool = False, db: AsyncSession = Depends(get_db)):
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
@@ -350,6 +354,32 @@ async def api_check_server(request: Request, server_id: int, db: AsyncSession = 
         stmt_protos = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id)
         res_protos = await db.execute(stmt_protos)
         db_protocols = {p.protocol_type: p for p in res_protos.scalars().all()}
+
+        if cached:
+            status = {'connection': 'cached', 'docker_installed': True, 'protocols': {}}
+            for proto, p in db_protocols.items():
+                info = {
+                    'protocol': proto,
+                    'port': p.port,
+                    'base_protocol': p.base_protocol or app_module.protocol_base(proto),
+                    'instance': p.instance or app_module.protocol_instance(proto),
+                    'display_name': p.display_name or app_module.protocol_display_name(proto),
+                    'container_name': p.container_name or app_module.protocol_container_name(proto),
+                    'container_exists': True,
+                    'container_running': True,
+                    'status_preserved': True
+                }
+                if p.extra_params:
+                    if 'awg_params' in p.extra_params:
+                        info['awg_params'] = p.extra_params['awg_params']
+                    settings = p.extra_params.get('settings', {})
+                    for k, v in settings.items():
+                        if k == 'expose_web':
+                            info['web_exposed'] = v
+                        else:
+                            info[k] = v
+                status['protocols'][proto] = info
+            return status
 
         ssh = app_module.get_ssh(server, db)
         ssh.connect()
