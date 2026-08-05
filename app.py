@@ -1865,7 +1865,7 @@ def _scrape_server_traffic(server, sid, my_conns):
                 for uc in my_conns:
                     if uc['protocol'] == proto and uc['client_id'] in client_bytes:
                         curr_bytes = client_bytes[uc['client_id']]
-                        last_bytes = uc.get('last_bytes', 0)
+                        last_bytes = uc.get('last_bytes') or 0
                         delta = curr_bytes - last_bytes if curr_bytes >= last_bytes else curr_bytes
                         server_updates.append((uc['id'], delta, curr_bytes))
         ssh.disconnect()
@@ -1945,8 +1945,11 @@ async def periodic_background_tasks():
                         updates.extend(server_updates)
                         
                 to_disable_uids = []
+                from datetime import timezone
+                now_utc = datetime.now(timezone.utc)
+                now_local = datetime.now()
+                
                 if updates:
-                    now = datetime.now()
                     for uc_id, delta, curr_bytes in updates:
                         uc = await db.get(models.UserConnection, uc_id)
                         if uc:
@@ -1960,32 +1963,44 @@ async def periodic_background_tasks():
                                 if strategy != 'never' and last_reset_iso:
                                     try:
                                         if strategy == 'daily':
-                                            reset_needed = now.date() > last_reset_iso.date()
+                                            reset_needed = now_utc.date() > last_reset_iso.date()
                                         elif strategy == 'weekly':
-                                            reset_needed = now.isocalendar()[1] != last_reset_iso.isocalendar()[1] or now.year != last_reset_iso.year
+                                            reset_needed = now_utc.isocalendar()[1] != last_reset_iso.isocalendar()[1] or now_utc.year != last_reset_iso.year
                                         elif strategy == 'monthly':
-                                            reset_needed = now.month != last_reset_iso.month or now.year != last_reset_iso.year
+                                            reset_needed = now_utc.month != last_reset_iso.month or now_utc.year != last_reset_iso.year
                                     except: pass
                                     
                                 if reset_needed:
                                     u.traffic_used = 0
-                                    u.last_reset_at = now
+                                    u.last_reset_at = now_utc
                                     
                                 u.traffic_used = (u.traffic_used or 0) + delta
                                 u.traffic_total = (u.traffic_total or 0) + delta
                                 
-                                limit = u.traffic_limit or 0
-                                if limit > 0 and u.traffic_used >= limit and u.enabled:
-                                    if uid not in to_disable_uids:
-                                        to_disable_uids.append(uid)
-                                        
-                                if u.expiration_date and u.enabled:
-                                    try:
-                                        if now > u.expiration_date:
-                                            if uid not in to_disable_uids:
-                                                to_disable_uids.append(uid)
-                                    except: pass
-                    await db.commit()
+                # Check for limits and expirations for all active users
+                users_stmt = select(models.User).where(models.User.enabled == True)
+                users_res = await db.execute(users_stmt)
+                active_users = users_res.scalars().all()
+                
+                for u in active_users:
+                    uid = u.id
+                    limit = u.traffic_limit or 0
+                    if limit > 0 and (u.traffic_used or 0) >= limit:
+                        if uid not in to_disable_uids:
+                            to_disable_uids.append(uid)
+                            u.enabled = False
+                            continue
+                            
+                    if u.expiration_date:
+                        try:
+                            if now_utc > u.expiration_date:
+                                if uid not in to_disable_uids:
+                                    to_disable_uids.append(uid)
+                                    u.enabled = False
+                        except Exception as e:
+                            logger.error(f"Error checking expiration date for user {uid}: {e}")
+
+                await db.commit()
                     
                 if to_disable_uids:
                     await perform_mass_operations(db, toggle_uids=[(uid, False) for uid in to_disable_uids])

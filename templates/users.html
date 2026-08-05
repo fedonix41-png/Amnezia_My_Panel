@@ -427,7 +427,8 @@
         const date = document.getElementById(dateId).value;
         if (!date) return null;
         const time = document.getElementById(timeId).value || '23:59';
-        return `${date}T${time}`;
+        const localDate = new Date(`${date}T${time}:00`);
+        return localDate.toISOString();
     }
 
     function setDateTimeValue(dateId, timeId, value) {
@@ -500,7 +501,12 @@
                                 ${u.created_at ? `<span>📅 ${u.created_at.substring(0, 10)}</span>` : ''}
                                 ${u.telegramId ? `<span>💬 ${u.telegramId}</span>` : ''}
                                 ${u.email ? `<span>📧 ${u.email}</span>` : ''}
-                                ${u.expiration_date ? `<span style="color: ${new Date(u.expiration_date) < new Date() ? 'var(--danger)' : 'var(--text-muted)'}">⌛ ${_('expiration_date_label')}: ${new Date(u.expiration_date).toLocaleString()}</span>` : ''}
+                                ${u.expiration_date ? (() => {
+                                    let raw = String(u.expiration_date).replace(' ', 'T');
+                                    if (raw.length === 19) raw += 'Z';
+                                    const parsedDate = new Date(raw);
+                                    return `<span style="color: ${parsedDate < new Date() ? 'var(--danger)' : 'var(--text-muted)'}">⌛ ${_('expiration_date_label')}: ${parsedDate.toLocaleString([], {year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute:'2-digit'})}</span>`;
+                                })() : ''}
                             </div>
                             ${u.description ? `<div class="client-meta" style="font-size: 0.75rem; opacity: 0.8; margin-top: 2px;">📝 ${u.description}</div>` : ''}
                             ${(() => {
@@ -964,11 +970,16 @@
     function toDateTimeLocalValue(value) {
         if (!value) return '';
         const raw = String(value).trim();
-        if (!raw) return '';
-        const match = raw.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
-        if (match) return match[1];
-        const parsed = new Date(raw);
+        if (!raw || raw === 'None') return '';
+        
+        let isoStr = raw.replace(' ', 'T');
+        if (isoStr.length === 19) {
+            isoStr += 'Z'; // Assume UTC if no timezone is provided
+        }
+        
+        const parsed = new Date(isoStr);
         if (Number.isNaN(parsed.getTime())) return '';
+        
         const offsetMs = parsed.getTimezoneOffset() * 60000;
         return new Date(parsed.getTime() - offsetMs).toISOString().slice(0, 16);
     }

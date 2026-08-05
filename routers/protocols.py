@@ -12,7 +12,7 @@ from managers.awg_manager import AWGManager
 from managers.backup_manager import BackupManager
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from database.session import get_db
 from database import models
 
@@ -280,6 +280,15 @@ async def api_uninstall_protocol(request: Request, server_id: int, req: Protocol
         p = res.scalar_one_or_none()
         if p:
             await db.delete(p)
+            
+            # Delete all user connections associated with this protocol on this server
+            await db.execute(
+                delete(models.UserConnection).where(
+                    models.UserConnection.server_id == server_id,
+                    models.UserConnection.protocol == req.protocol
+                )
+            )
+            
             await db.commit()
             
         ssh.disconnect()
