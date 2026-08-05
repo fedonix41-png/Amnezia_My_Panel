@@ -1143,67 +1143,57 @@ def _touch_api_token(token_entry: dict) -> bool:
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
-    h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
-    return f"{salt}${h.hex()}"
+    iterations = 600000
+    h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), iterations)
+    return f"{iterations}${salt}${h.hex()}"
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    import hmac
     try:
-        salt, h = password_hash.split('$', 1)
-        new_h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
-        return new_h.hex() == h
+        parts = password_hash.split('$')
+        if len(parts) == 2:
+            salt, h = parts
+            iterations = 100000
+        elif len(parts) == 3:
+            iters_str, salt, h = parts
+            iterations = int(iters_str)
+        else:
+            return False
+
+        new_h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), iterations)
+        return hmac.compare_digest(new_h.hex(), h)
     except Exception:
         return False
 
 
-async def perform_delete_user(data: dict, user_id: str):
-    user = next((u for u in data['users'] if u['id'] == user_id), None)
+async def perform_delete_user(db, user_id: str) -> bool:
+    from database import models
+    user = await db.get(models.User, user_id)
     if not user:
         return False
-    # Remove user's connections from servers
-    user_conns = [c for c in data.get('user_connections', []) if c['user_id'] == user_id]
-    for uc in user_conns:
-        try:
-            sid = uc['server_id']
-            if sid < len(data['servers']):
-                server = data['servers'][sid]
-                ssh = get_ssh(server)
-                ssh.connect()
-                manager = get_protocol_manager(ssh, uc['protocol'])
-                _manager_call(manager, 'remove_client', uc['protocol'], uc['client_id'])
-                ssh.disconnect()
-        except Exception as e:
-            logger.warning(f"Failed to remove connection {uc['client_id']} during user delete: {e}")
-    data['user_connections'] = [c for c in data.get('user_connections', []) if c['user_id'] != user_id]
-    data['users'] = [u for u in data['users'] if u['id'] != user_id]
+    
+    # Remove user's connections from servers efficiently
+    await perform_mass_operations(db, delete_uids=[user_id])
+    
+    await db.delete(user)
+    await db.commit()
     return True
 
 
-async def perform_toggle_user(data: dict, user_id: str, enable: bool) -> bool:
+async def perform_toggle_user(db, user_id: str, enable: bool) -> bool:
     """Enable or disable a user and propagate the change to all their VPN connections."""
-    user = next((u for u in data['users'] if u['id'] == user_id), None)
+    from database import models
+    user = await db.get(models.User, user_id)
     if not user:
         return False
 
-    user['enabled'] = enable
+    user.enabled = enable
+    await db.commit()
 
-    user_conns = [c for c in data.get('user_connections', []) if c['user_id'] == user_id]
-    for uc in user_conns:
-        try:
-            sid = uc['server_id']
-            if sid >= len(data['servers']):
-                continue
-            server = data['servers'][sid]
-            ssh = get_ssh(server)
-            await asyncio.to_thread(ssh.connect)
-            manager = get_protocol_manager(ssh, uc['protocol'])
-            await asyncio.to_thread(
-                _manager_call, manager, 'toggle_client', uc['protocol'], uc['client_id'], enable
-            )
-            await asyncio.to_thread(ssh.disconnect)
-        except Exception as e:
-            logger.warning(f"Failed to toggle connection {uc['client_id']} during user toggle: {e}")
-
+    # Toggle connections on servers
+    await perform_mass_operations(db, toggle_uids=[(user_id, enable)])
+    
     return True
 
 
@@ -1459,8 +1449,10 @@ async def _check_admin(db, request: Request):
         res = await db.execute(stmt)
         token = res.scalars().first()
         if token and token.user and token.user.role in ('admin', 'support') and token.user.enabled:
-            token.last_used_at = models.utcnow()
-            await db.commit()
+            now = models.utcnow()
+            if not token.last_used_at or (now - token.last_used_at).total_seconds() > 300:
+                token.last_used_at = now
+                await db.commit()
             return token.user
     return None
 

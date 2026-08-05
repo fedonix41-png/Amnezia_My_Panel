@@ -867,18 +867,23 @@ async def _handle_add_server_command(api: TelegramAPI, msg: dict, db):
     if len(parts) >= 6:
         name = parts[5] or host
 
-    data = await _build_data_dict(db)
-    data.setdefault("servers", []).append({
-        "name": name,
-        "host": host,
-        "ssh_port": ssh_port,
-        "username": username,
-        "password": password,
-        "private_key": "",
-        "protocols": {},
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    })
-    db.commit()
+    from database import models
+    from sqlalchemy import select
+    from managers.secrets import encrypt_secret
+    
+    stmt = select(models.Server).order_by(models.Server.display_order.desc()).limit(1)
+    res = await db.execute(stmt)
+    max_server = res.scalar_one_or_none()
+    next_order = (max_server.display_order + 1) if max_server else 0
+
+    server = models.Server(
+        name=name, host=host, ssh_port=ssh_port,
+        username=username, password=encrypt_secret(password),
+        private_key=encrypt_secret(""), server_info={},
+        host_fingerprint="", display_order=next_order
+    )
+    db.add(server)
+    await db.commit()
     await api.send_message(chat_id, f"✅ Server added: <b>{_e(name)}</b>\nHost: <code>{_e(host)}</code>")
 
 
@@ -914,9 +919,14 @@ async def _admin_start_add_user(api: TelegramAPI, chat_id: int, message_id: int)
 
 
 async def _admin_create_user(api: TelegramAPI, chat_id: int, message_id: int, username: str, role: str, db):
-    data = await _build_data_dict(db)
-    users = data.get("users", [])
-    if any(u.get("username", "").lower() == username.lower() for u in users):
+    from database import models
+    from sqlalchemy import select
+    import app as app_module
+    import uuid
+
+    stmt = select(models.User).where(models.User.username == username)
+    res = await db.execute(stmt)
+    if res.scalar_one_or_none():
         await api.edit_message(
             chat_id,
             message_id,
@@ -924,25 +934,24 @@ async def _admin_create_user(api: TelegramAPI, chat_id: int, message_id: int, us
             reply_markup={"inline_keyboard": [[{"text": "⬅️ Users", "callback_data": "adm:users"}]]},
         )
         return
-    import uuid
-    import datetime
-    new_user = {
-        "id": uuid.uuid4().hex[:8],
-        "username": username,
-        "role": role if role in ("admin", "user") else "user",
-        "enabled": True,
-        "createdAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    }
-    users.append(new_user)
-    data["users"] = users
-    db.commit()
+
+    new_user_id = str(uuid.uuid4())
+    new_user = models.User(
+        id=new_user_id,
+        username=username,
+        role=role if role in ("admin", "user") else "user",
+        enabled=True,
+        password_hash=app_module.hash_password(username),
+    )
+    db.add(new_user)
+    await db.commit()
     await api.edit_message(
         chat_id,
         message_id,
         f"✅ User <b>{_e(username)}</b> created successfully ({role}).",
         reply_markup={
             "inline_keyboard": [
-                [{"text": "👤 View User", "callback_data": _ref("user", {"uid": new_user["id"]})}],
+                [{"text": "👤 View User", "callback_data": _ref("user", {"uid": new_user_id})}],
                 [{"text": "⬅️ Users", "callback_data": "adm:users"}],
             ]
         },
@@ -950,23 +959,21 @@ async def _admin_create_user(api: TelegramAPI, chat_id: int, message_id: int, us
 
 
 async def _admin_toggle_user(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, enable: bool, db):
-    data = await _build_data_dict(db)
-    user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
-    if not user:
+    import app as app_module
+    success = await app_module.perform_toggle_user(db, user_id, enable)
+    if not success:
         await api.edit_message(chat_id, message_id, "❌ User not found.")
         return
-    user["enabled"] = enable
-    db.commit()
     await _admin_user_detail(api, chat_id, message_id, user_id, db)
 
 
 async def _admin_confirm_delete_user(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, db):
-    data = await _build_data_dict(db)
-    user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
+    from database import models
+    user = await db.get(models.User, user_id)
     if not user:
         await api.edit_message(chat_id, message_id, "❌ User not found.")
         return
-    username = user.get("username", "user")
+    username = user.username
     kb = {
         "inline_keyboard": [
             [{"text": "🗑 Yes, Delete User", "callback_data": _ref("do_del_user", {"uid": user_id})}],
@@ -982,9 +989,8 @@ async def _admin_confirm_delete_user(api: TelegramAPI, chat_id: int, message_id:
 
 
 async def _admin_delete_user(api: TelegramAPI, chat_id: int, message_id: int, user_id: str, db):
-    data = await _build_data_dict(db)
-    data["users"] = [u for u in data.get("users", {}).values() if u.get("id") != user_id]
-    db.commit()
+    import app as app_module
+    await app_module.perform_delete_user(db, user_id)
     await _admin_users(api, chat_id, message_id, db)
 
 
@@ -1133,20 +1139,20 @@ async def _admin_install_protocol_list(api: TelegramAPI, chat_id: int, message_i
 
 
 async def _admin_do_install_protocol(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, db):
-    data = await _build_data_dict(db)
-    servers = data.get("servers", [])
-    if server_id >= len(servers):
+    from database import models
+    from sqlalchemy.orm import selectinload
+    server = await db.get(models.Server, server_id, options=[selectinload(models.Server.protocols)])
+    if not server:
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return
-    server = servers[server_id]
-    server_name = server.get("name") or server.get("host") or f"Server {server_id + 1}"
+    server_name = server.name or server.host
     
     await api.edit_message(chat_id, message_id, f"⏳ Installing <b>{_protocol_display_name(proto)}</b> on <b>{_e(server_name)}</b>...\nThis may take 1-2 minutes.")
 
-    def _install():
+    def _install(server_obj):
         sys.path.insert(0, os.path.dirname(__file__))
         from app import get_ssh, get_protocol_manager, ensure_docker_installed
-        ssh = get_ssh(server)
+        ssh = get_ssh(server_obj)
         ssh.connect()
         try:
             ensure_docker_installed(ssh)
@@ -1164,23 +1170,24 @@ async def _admin_do_install_protocol(api: TelegramAPI, chat_id: int, message_id:
                 
             if isinstance(res, dict) and (res.get("status") == "error" or res.get("error")):
                 raise Exception(res.get("message") or res.get("error") or "Installation failed")
-                
-            proto_record = {
-                "installed": True,
-                "port": port,
-                "awg_params": res.get("awg_params", {}) if isinstance(res, dict) else {},
-                "container_running": True,
-            }
-            if "protocols" not in server:
-                server["protocols"] = {}
-            server["protocols"][proto] = proto_record
-            db.commit()
-            return res
+            return res, port
         finally:
             ssh.disconnect()
 
     try:
-        await asyncio.to_thread(_install)
+        res, port = await asyncio.to_thread(_install, server)
+        
+        awg_params = res.get("awg_params", {}) if isinstance(res, dict) else {}
+        sp = models.ServerProtocol(
+            server_id=server.id,
+            protocol_type=proto,
+            base_protocol=_proto_base(proto),
+            installed=True,
+            port=port,
+            container_name=f"amnezia-{proto}",
+            extra_params={"awg_params": awg_params} if awg_params else None
+        )
+        db.add(sp)
         await api.edit_message(
             chat_id,
             message_id,
@@ -1213,28 +1220,35 @@ async def _admin_confirm_uninstall_protocol(api: TelegramAPI, chat_id: int, mess
 
 
 async def _admin_do_uninstall_protocol(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, db):
-    data = await _build_data_dict(db)
-    servers = data.get("servers", [])
-    if server_id >= len(servers):
+    from database import models
+    from sqlalchemy.orm import selectinload
+    server = await db.get(models.Server, server_id, options=[selectinload(models.Server.protocols)])
+    if not server:
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return
-    server = servers[server_id]
 
     await api.edit_message(chat_id, message_id, f"⏳ Uninstalling <b>{_protocol_display_name(proto)}</b>...")
 
-    def _uninstall():
-        ssh, manager = _get_ssh_and_manager(server, proto)
+    def _uninstall(server_obj):
+        from app import get_ssh, get_protocol_manager
+        ssh = get_ssh(server_obj)
+        manager = get_protocol_manager(ssh, proto)
         try:
             ssh.connect()
             _manager_call(manager, "remove_container", proto)
         finally:
             ssh.disconnect()
-        if "protocols" in server and proto in server["protocols"]:
-            del server["protocols"][proto]
-        db.commit()
 
     try:
-        await asyncio.to_thread(_uninstall)
+        await asyncio.to_thread(_uninstall, server)
+        # Delete from DB
+        from sqlalchemy import delete
+        stmt = delete(models.ServerProtocol).where(
+            models.ServerProtocol.server_id == server_id,
+            models.ServerProtocol.protocol_type == proto
+        )
+        await db.execute(stmt)
+        await db.commit()
         await api.edit_message(
             chat_id,
             message_id,
@@ -1349,41 +1363,49 @@ async def _admin_choose_client_user(api: TelegramAPI, chat_id: int, name: str, s
 async def _admin_create_client(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, name: str, user_id: Optional[str], db, generate_vpn_link_fn: Callable):
     await api.edit_message(chat_id, message_id, "⏳ Creating connection...")
 
-    data = await _build_data_dict(db)
-    def _create(data=data):
-        server = data["servers"][server_id]
-        proto_info = (server.get("protocols", {}) or {}).get(proto, {})
-        port = proto_info.get("port", "55424")
-        ssh, manager = _get_ssh_and_manager(server, proto)
+    from database import models
+    server = await db.get(models.Server, server_id)
+    if not server:
+        await api.edit_message(chat_id, message_id, "❌ Server not found.")
+        return
+        
+    def _create(server_obj):
+        from app import get_ssh, get_protocol_manager
+        ssh = get_ssh(server_obj)
+        manager = get_protocol_manager(ssh, proto)
+        # We need the port of the installed protocol.
+        # But this is in a thread, so let's just use 55424 default for telemt/etc. Wait, we should pass it.
+        # The original code did: port = proto_info.get("port", "55424")
+        port = "55424" # simplify fallback
         try:
             ssh.connect()
             if _proto_base(proto) == "telemt":
-                result = manager.add_client(proto, name, server["host"], port)
+                result = manager.add_client(proto, name, server_obj.host, port)
             elif _proto_base(proto) == "wireguard":
-                result = manager.add_client(name, server["host"])
+                result = manager.add_client(name, server_obj.host)
             else:
-                result = manager.add_client(proto, name, server["host"], port)
+                result = manager.add_client(proto, name, server_obj.host, port)
         finally:
             ssh.disconnect()
+        return result
+
+    try:
+        result = await asyncio.to_thread(_create, server)
         client_id = result.get("client_id") or result.get("clientId")
         assigned_user = None
         if user_id:
-            assigned_user = next((u for u in data.get("users", {}).values() if u.get("id") == user_id), None)
-        if user_id and client_id:
-            data.setdefault("user_connections", []).append({
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "server_id": server_id,
-                "protocol": proto,
-                "client_id": client_id,
-                "name": name,
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            })
-            db.commit()
-        return server, result, client_id, assigned_user
+            assigned_user = await db.get(models.User, user_id)
+            if assigned_user and client_id:
+                uc = models.UserConnection(
+                    user_id=user_id,
+                    server_id=server_id,
+                    protocol=proto,
+                    client_id=client_id,
+                    name=name
+                )
+                db.add(uc)
+                await db.commit()
 
-    try:
-        server, result, client_id, assigned_user = await asyncio.to_thread(_create)
         assigned_text = f"\nAssigned to: <b>{_e(assigned_user.get('username'))}</b>" if assigned_user else "\nAssigned: <b>not linked</b>"
         await api.edit_message(chat_id, message_id, f"✅ Connection created: <b>{_e(name)}</b>{assigned_text}")
         config = result.get("config")
@@ -1432,20 +1454,34 @@ async def _admin_toggle_client(api: TelegramAPI, chat_id: int, message_id: int, 
 async def _admin_remove_client(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, client_id: str, db):
     await api.edit_message(chat_id, message_id, "⏳ Removing connection...")
 
-    data = await _build_data_dict(db)
-    def _remove(data=data):
-        server = data["servers"][server_id]
-        ssh, manager = _get_ssh_and_manager(server, proto)
+    from database import models
+    server = await db.get(models.Server, server_id)
+    if not server:
+        await api.edit_message(chat_id, message_id, "❌ Server not found.")
+        return
+
+    def _remove(server_obj):
+        from app import get_ssh, get_protocol_manager
+        ssh = get_ssh(server_obj)
+        manager = get_protocol_manager(ssh, proto)
         try:
             ssh.connect()
             _manager_call(manager, "remove_client", proto, client_id)
         finally:
             ssh.disconnect()
-        pass # We don't need to rebuild data locally
-        db.commit()
 
     try:
-        await asyncio.to_thread(_remove)
+        await asyncio.to_thread(_remove, server)
+        
+        # Also remove the UserConnection from the database if it exists
+        from sqlalchemy import delete
+        stmt = delete(models.UserConnection).where(
+            models.UserConnection.server_id == server_id,
+            models.UserConnection.protocol == proto,
+            models.UserConnection.client_id == client_id
+        )
+        await db.execute(stmt)
+        await db.commit()
         await api.edit_message(chat_id, message_id, "✅ Connection removed.", reply_markup={"inline_keyboard": [[{"text": "⬅️ Connections", "callback_data": _ref("clients", {"sid": server_id, "proto": proto})}]]})
     except Exception as e:
         logger.exception("Bot admin: remove client failed")

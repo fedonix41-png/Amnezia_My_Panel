@@ -26,6 +26,8 @@ class AppearanceSettings(BaseModel):
     title: Optional[str] = "Amnezia Web Panel"
     theme: Optional[str] = "dark"
     accent: Optional[str] = "#5865F2"
+    logo: Optional[str] = ""
+    subtitle: Optional[str] = ""
 
 
 class SyncSettings(BaseModel):
@@ -334,11 +336,20 @@ async def api_backup_download(request: Request, db: AsyncSession = Depends(get_d
     for k in export_data:
         for item in export_data[k]:
             item.pop('_sa_instance_state', None)
+            
+    for user in export_data['users']:
+        user.pop('password_hash', None)
+        user.pop('share_password_hash', None)
+        user.pop('share_token', None)
+        
+    for server in export_data['servers']:
+        server.pop('password', None)
+        server.pop('private_key', None)
     
     import tempfile
-    tmp_file = tempfile.mktemp(suffix=".json")
-    with open(tmp_file, 'w') as f:
+    with tempfile.NamedTemporaryFile(mode='w', suffix=".json", delete=False) as f:
         json.dump(export_data, f, default=str)
+        tmp_file = f.name
     
     return FileResponse(tmp_file, media_type='application/json', filename='awp_backup.json')
 

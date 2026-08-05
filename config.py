@@ -122,7 +122,7 @@ TRUSTED_HOSTS = _split_csv(os.environ.get("TRUSTED_HOSTS", "localhost,127.0.0.1"
 # ---------------------------------------------------------------------------
 # Session cookie
 # ---------------------------------------------------------------------------
-SESSION_COOKIE_SECURE = _truthy(os.environ.get("SESSION_COOKIE_SECURE"), default=False)
+SESSION_COOKIE_SECURE = _truthy(os.environ.get("SESSION_COOKIE_SECURE"), default=not AWP_DEV)
 SESSION_COOKIE_SAMESITE = (os.environ.get("SESSION_COOKIE_SAMESITE") or "lax").strip().lower()
 if SESSION_COOKIE_SAMESITE not in ("lax", "strict", "none"):
     SESSION_COOKIE_SAMESITE = "lax"

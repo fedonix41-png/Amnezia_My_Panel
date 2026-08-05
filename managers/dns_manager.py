@@ -9,6 +9,7 @@ class DNSManager:
         self.ssh = ssh
 
     def install_protocol(self, protocol_type='dns', port='53'):
+        port = int(port) if port else 53
         """Install AmneziaDNS service."""
         try:
             # 1. Check if docker is installed

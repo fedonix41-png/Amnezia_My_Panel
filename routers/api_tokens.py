@@ -87,12 +87,16 @@ async def api_create_token(request: Request, req: CreateApiTokenRequest, db: Asy
 async def api_revoke_token(request: Request, token_id: str, db: AsyncSession = Depends(get_db)):
     """Permanently revoke a token. The associated bearer value can never be
     used again, even if the same name is reissued — every token has its own hash."""
-    if not await app_module._check_admin(db, request):
+    cur = await app_module._check_admin(db, request)
+    if not cur:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
         
     token_obj = await db.get(models.ApiToken, token_id)
     if not token_obj:
         return JSONResponse({'error': 'Token not found'}, status_code=404)
+        
+    if token_obj.user_id != cur.id and cur.role != 'admin':
+        return JSONResponse({'error': 'Forbidden to revoke other user tokens'}, status_code=403)
         
     await db.delete(token_obj)
     await db.commit()

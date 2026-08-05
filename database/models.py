@@ -24,7 +24,7 @@ class User(Base):
     
     # Sharing
     share_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    share_token: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    share_token: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     share_password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # Traffic
@@ -36,7 +36,7 @@ class User(Base):
     traffic_limit: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     
     # Optional Profile
-    telegramId: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    telegramId: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True, index=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     remnawave_uuid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
@@ -83,7 +83,7 @@ class ServerProtocol(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     server_id: Mapped[int] = mapped_column(ForeignKey("servers.id", ondelete="CASCADE"), index=True)
-    protocol_type: Mapped[str] = mapped_column(String(50))
+    protocol_type: Mapped[str] = mapped_column(String(50), index=True)
     installed: Mapped[bool] = mapped_column(Boolean, default=False)
     port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     base_protocol: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -98,11 +98,11 @@ class ServerProtocol(Base):
 class UserConnection(Base):
     __tablename__ = "user_connections"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     server_id: Mapped[int] = mapped_column(ForeignKey("servers.id", ondelete="CASCADE"), index=True)
-    protocol: Mapped[str] = mapped_column(String(50))
-    client_id: Mapped[str] = mapped_column(String(100))
+    protocol: Mapped[str] = mapped_column(String(50), index=True)
+    client_id: Mapped[str] = mapped_column(String(100), index=True)
     name: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
@@ -116,7 +116,7 @@ class ApiToken(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
-    token_hash: Mapped[str] = mapped_column(String(255))
+    token_hash: Mapped[str] = mapped_column(String(255), index=True)
     token_prefix: Mapped[str] = mapped_column(String(10))
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

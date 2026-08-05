@@ -226,6 +226,7 @@ class XrayManager:
         }
 
     def install_protocol(self, port=443, site_name='yahoo.com'):
+        if port is not None: port = int(port)
         """Full installation of Xray."""
         results = []
 

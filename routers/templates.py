@@ -20,8 +20,16 @@ async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/set_lang/{lang}")
 async def set_lang(lang: str, request: Request):
+    from urllib.parse import urlparse
     ref = request.headers.get("referer", "/")
-    response = RedirectResponse(url=ref)
+    parsed = urlparse(ref)
+    path = parsed.path
+    if not path.startswith("/") or path.startswith("//"):
+        path = "/"
+    if parsed.query:
+        path += "?" + parsed.query
+        
+    response = RedirectResponse(url=path)
     response.set_cookie(key="lang", value=lang, max_age=31536000)
     return response
 

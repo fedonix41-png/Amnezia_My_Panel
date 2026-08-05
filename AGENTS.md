@@ -1,86 +1,194 @@
-# Amnezia Web Panel — System Prompt
+# Amnezia Web Panel — AI Agent Guide
 
-Ты опытный full-stack разработчик и архитектор. Твоя специализация — Python, FastAPI, SQLAlchemy, Docker, VPN-инфраструктура. Ты думаешь о коде как о продукте: читаемый, поддерживаемый, безопасный, с минимумом багов. Ты не боишься предлагать улучшения и задавать вопросы, если видишь проблему.
+## Окружение
 
-## Окружение (единственные жёсткие правила)
-
-Эти правила защищают основную ОС от случайных изменений. Здесь без исключений:
-
-- **Весь Python — только в `venv/`**: `venv/bin/python`, `venv/bin/pytest`, `venv/bin/pip`.
-- **Не используй `sudo`** на хосте разработки.
-- **Не ставь пакеты в системный Python** (`pip install` без venv).
-- Если нужно установить зависимость: `venv/bin/pip install ...`
-- Запуск тестов: `venv/bin/python -m pytest`
-- Быстрая проверка синтаксиса: `venv/bin/python -m py_compile <file>`
-
-Всё остальное ниже — не приказы, а знания о проекте, которые помогают тебе писать код, соответствующий архитектуре, и не изобретать велосипеды.
+- Весь Python только через `venv/`: `venv/bin/python`, `venv/bin/pip`, `venv/bin/pytest`
+- Не использовать `sudo` на хосте
+- Проверка синтаксиса: `venv/bin/python -m py_compile <file>`
+- Тесты: `venv/bin/python -m pytest`
 
 ## Что это за проект
 
-Amnezia Web Panel — self-hosted панель управления VPN-серверами. Один контейнер управляет множеством удалённых серверов по SSH, разворачивая на них WireGuard, AmneziaWG, Xray (VLESS-Reality), SOCKS5, AdGuard Home, Nginx, DNS и Telegram-бота.
+Self-hosted панель управления VPN-серверами. Один Docker-контейнер управляет множеством удалённых серверов по SSH, разворачивая WireGuard, AmneziaWG, Xray, SOCKS5, AdGuard Home, Nginx, DNS и Telegram-бота.
 
-**Стек**: Python 3.12+, FastAPI (ASGI, Starlette), SQLAlchemy (async, PostgreSQL/SQLite), paramiko (SSH), Docker Compose для деплоя панели.
+**Стек:** Python 3.12+, FastAPI, SQLAlchemy (async), paramiko, Docker Compose.
+**Dev-режим:** `AWP_DEV=1` — SQLite, синтез ключей, отключение TrustedHost.
+**Production:** PostgreSQL (asyncpg), Fernet-шифрование секретов, обязательные `SECRET_KEY` и `MASTER_KEY`.
 
-## Документация (поддерживай в актуальном виде)
+## Структура проекта
 
-- **`AGENTS.md`** — быстрый старт: стек, команды, структура проекта, конвенции.
-- **`docs/ARCHITECTURE.md`** — глубокий SSOT: middleware, протоколы, SSH-слой, безопасность, реестр менеджеров, паттерн расширения.
-- Если твои изменения меняют поведение, сигнатуры или структуру — обнови соответствующий документ. Документация должна быть полезной следующему разработчику (или тебе же через месяц).
+```
+app.py              — точка входа, FastAPI app, роутинг протоколов, туннели, утилиты (~2150 строк)
+telegram_bot.py     — Telegram-бот (~1680 строк)
+config.py           — все настройки из env/.env, валидация ключей при старте
+middleware.py        — CSRF, SecurityHeaders, SlowAPI
+managers/           — protocol managers (duck-typing, без базового класса)
+  ssh_manager.py    — paramiko-обёртка, ЕДИНСТВЕННЫЙ модуль, открывающий SSH-сокеты
+  secrets.py        — Fernet-шифрование секретов серверов (формат v1:<token>)
+  wireguard_manager.py, awg_manager.py, xray_manager.py, socks5_manager.py,
+  adguard_manager.py, nginx_manager.py, dns_manager.py, telemt_manager.py,
+  backup_manager.py
+routers/            — FastAPI роутеры (auth, servers, protocols, connections,
+                      users, sharing, settings, templates, api_tokens)
+database/
+  models.py         — ORM: User, Server, ServerProtocol, UserConnection, ApiToken, Setting
+  session.py        — get_db (FastAPI dependency), get_db_context (context manager)
+  repositories.py   — высокоуровневые операции (ServerRepository, UserRepository)
+  crud.py           — CRUD для таблицы settings (key-value JSON)
+templates/          — Jinja2 HTML-шаблоны
+static/             — CSS, JS
+tests/              — pytest + FastAPI TestClient, in-memory SQLite
+docs/ARCHITECTURE.md — глубокий SSOT: middleware, протоколы, SSH, безопасность
+```
 
-Для навигации по большим файлам (`app.py` ~2157 строк, `telegram_bot.py` ~1680 строк) используй grep по сигнатурам функций — это быстрее и точнее, чем читать всё подряд.
+## Ключевые паттерны
 
-## Ключевые архитектурные знания
+### Роутер (эндпоинт)
 
-Это детали, уникальные для проекта. Они предотвращают галлюцинации и ошибки интеграции.
+Роутеры импортируют `app.py` как `app_module` для доступа к общим функциям (`_check_admin`, `_manager_call` и т.д.). Это обход циклических импортов — не меняй этот паттерн.
 
-### База данных
+```python
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from database.session import get_db
+import app as app_module
 
-- Данные хранятся в SQLAlchemy ORM. Модели: `database/models.py` (User, Server, ServerProtocol, UserConnection, ApiToken, Setting).
-- Production — PostgreSQL через `asyncpg`, dev — SQLite через `aiosqlite` (`config.DATABASE_URL`).
-- Сессии: `database/session.py` — `get_db` (FastAPI dependency), `get_db_context` (контекстный менеджер).
-- Репозитории: `database/repositories.py` — высокоуровневые операции над моделями.
-- `data.json` — **legacy**, больше не используется как основное хранилище. Функции `load_data`/`save_data`/`DATA_LOCK` удалены. Но есть `_maybe_migrate_legacy_data_file()` для one-time переноса старых данных.
-- Настройки панели (ssl, appearance, telegram) хранятся в таблице `settings` (key-value JSON). CRUD: `database/crud.py`.
+router = APIRouter(tags=["Example"])
 
-### Аутентификация и авторизация
+@router.post("/api/example/action")
+async def example_action(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await app_module._check_admin(db, request)
+    if not user:
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    # ... бизнес-логика ...
+    return JSONResponse({"status": "ok"})
+```
 
-- Пользователи и пароли: PBKDF2-SHA256 (100k итераций), `hash_password`/`verify_password`.
-- Центральный гейт: `_check_admin(db, request)` — принимает `AsyncSession` и `Request`, возвращает пользователя или `None`. Роуты вызывают: `if not await _check_admin(db, request): return 403`.
-- Три роли: `admin`, `support`, `user`.
-- API-токены: формат `awp_<32 chars>`, хранятся как SHA-256 хэш. Проверяются через `_resolve_api_token`. Bearer-запросы обходят CSRF (см. middleware).
-- Публичный шеринг: отдельный flow с `share_token` и `share_password_hash`.
+### Вызов protocol manager
 
-### Protocol managers
+`WireGuardManager` — исключение: его методы НЕ принимают `protocol_type` первым аргументом. `_manager_call` скрывает это различие:
 
-- Duck-typing, **без базового класса**. Каждый менеджер в `managers/` принимает `SSHManager` и управляет одним протоколом на удалённом сервере через Docker.
-- Большинство клиентских методов принимают `protocol_type` первым аргументом. **Исключение**: `WireGuardManager` — его методы не принимают `protocol_type` (одиночный инстанс). Хелпер `_manager_call(manager, method, protocol, *args)` скрывает это различие.
-- `get_protocol_manager(ssh, protocol)` — диспетчер с ленивыми импортами, фолбэк на `AWGManager`.
-- `BASE_PROTOCOLS` и `MULTI_INSTANCE_PROTOCOLS` в `app.py` — реестр протоколов.
-- Новый протокол: полный 7-шаговый чек-лист в `docs/ARCHITECTURE.md` §13.
+```python
+ssh = SSHManager(host, port, username, password, private_key)
+ssh.connect()
+try:
+    app_module.ensure_docker_installed(ssh)
+    manager = app_module.get_protocol_manager(ssh, protocol)
+    result = await app_module._manager_call(
+        manager, "install", protocol, *args, **kwargs
+    )
+finally:
+    ssh.disconnect()
+```
 
-### SSH и безопасность
+### Работа с БД
 
-- Подключение к удалённым серверам — только через `SSHManager` (paramiko). Никакие другие модули не открывают свои сокеты.
-- **Критично**: sudo-пароли передаются через paramiko stdin канал. Никогда не использовать `echo '<p>' | sudo -S` — это утекает в `/proc/<pid>/cmdline`.
-- Host key pinning: `_PinningHostKeyPolicy` (не `AutoAddPolicy`). Отпечаток пинится только после успешного handshake.
-- Пользовательские строки (домены, email, имена) валидируются до интерполяции в shell-команды: `nginx_manager._validate_domain` / `_validate_email`. Пути: `shlex.quote`.
-- Секреты серверов (пароль, приватный ключ) шифруются Fernet: формат `v1:<token>` (`managers/secrets.py`). `MASTER_KEY` из env обязателен.
+- В роутах: `db: AsyncSession = Depends(get_db)` — сессия живёт в рамках запроса
+- Вне роутов (фоновые задачи, бот): `async with get_db_context() as session:`
+- Коммит всегда явный: `await db.commit()`
+- `expire_on_commit=False`, `autoflush=False` — объекты остаются валидными после коммита
+
+### Реестр протоколов
+
+```python
+# app.py — добавляй новые протоколы сюда:
+BASE_PROTOCOLS = ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'dns',
+                  'wireguard', 'socks5', 'adguard', 'nginx']
+MULTI_INSTANCE_PROTOCOLS = {'awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'socks5'}
+```
+
+`MULTI_INSTANCE_PROTOCOLS` — протоколы, которые могут иметь несколько инстансов на одном сервере (каждый со своим `protocol_type` вроде `awg`, `awg_2`, `xray_custom`).
+
+## Безопасность (критично)
+
+### SSH-пароли
+
+Передаются через paramiko stdin-канал. **НИКОГДА** не используй:
+```bash
+# ❌ Утекает в /proc/<pid>/cmdline
+echo 'password' | sudo -S command
+```
+Правильно — через `SSHManager.run_sudo_command()`, который передаёт пароль через stdin.
+
+### Валидация пользовательского ввода
+
+Все строки от пользователя (домены, email, имена) валидируются ДО интерполяции в shell:
+- `nginx_manager._validate_domain()` / `_validate_email()`
+- Пути: `shlex.quote()`
+
+### Секреты
+
+- Пароли/ключи серверов шифруются Fernet: `encrypt_secret()` / `decrypt_secret()` из `managers/secrets.py`
+- API-токены: формат `awp_<32 chars>`, хранятся как SHA-256 хэш, никогда в открытом виде
+- Host key pinning: `_PinningHostKeyPolicy` — отпечаток пиннится после первого успешного handshake
 
 ### Middleware (порядок важен)
 
-Внешний → внутренний: **TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session**.
-- `CsrfCookieMiddleware` (`middleware.py`): double-submit, bearer-запросы exempt.
-- `SecurityHeadersMiddleware`: CSP, X-Frame-Options, etc.
-- `SlowAPIMiddleware`: rate-limiting через slowapi.
-- `TrustedHostMiddleware`: только в production (пропускается при `AWP_DEV=1`).
+Внешний → внутренний: `TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session`
 
-### Туннели и WARP
+- CSRF: double-submit cookie, Bearer-запросы exempt
+- `TrustedHost`: только в production (пропускается при `AWP_DEV=1`)
 
-- Код Cloudflare Tunnel / ngrok / Cloudflare WARP — в `app.py` (TunnelRuntime, start_tunnel, stop_tunnel, get_tunnel_status).
-- WARP управляется через `warp-cli`.
+## Чего НЕ делать
 
-### Роутеры
+- **Не добавляй глобальное состояние** (глобальные dict/list для хранения данных) — всё состояние в БД
+- **Не используй синхронный DB-доступ** вне `run_in_executor` — проект полностью async
+- **Не создавай файлы в корне проекта** — роутеры в `routers/`, менеджеры в `managers/`
+- **Не ломай `import app as app_module`** — это осознанный обход циклических импортов
+- **Не добавляй `try/except` без логирования** — ошибки не должны теряться молча
+- **Не используй `data.json`** — это legacy, всё хранится в БД через SQLAlchemy
+- **Не добавляй `echo '<pass>' | sudo -S`** в shell-скрипты — используй paramiko stdin
 
-- Все эндпоинты вынесены в `routers/` (auth, servers, protocols, connections, users, sharing, settings, templates, api_tokens).
-- Монтируются в `app.py` через `app.include_router`.
-- Роутеры импортируют `app` как `import app as app_module` для доступа к общим функциям.
+## Тесты
+
+**Запуск:** `venv/bin/python -m pytest` (или `venv/bin/python -m pytest tests/test_auth.py -v`)
+
+**Инфраструктура:**
+- `conftest.py` — in-memory SQLite, автосоздание схем, дефолтный admin-пользователь
+- `app_client` fixture — `FastAPI TestClient` с `raise_server_exceptions=False`
+- CSRF: перед POST-запросом сделай GET для получения `csrf_token` cookie
+
+**Паттерн теста:**
+```python
+class TestSomething:
+    def test_action_success(self, app_client):
+        c = app_client
+        c.get("/login")  # получить csrf cookie
+        csrf = c.cookies.get("csrf_token", "")
+
+        r = c.post(
+            "/api/something/action",
+            json={"key": "value"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+```
+
+**Для тестов без CSRF** (API-токены): используй `Authorization: Bearer awp_...` — bearer-запросы обходят CSRF.
+
+**Менеджеры:** тесты в `tests/managers/`. SSH-соединения мокаются, не открывай реальные сокеты в тестах.
+
+## Legacy и миграции
+
+- `data.json` — **не используется**, данные перенесены в БД. Функции `load_data`/`save_data` удалены
+- `_maybe_migrate_legacy_data_file()` — one-time перенос при первом запуске после миграции
+- `_resolve_api_token()` — работает со словарём в памяти (legacy), новые токены пишутся в таблицу `ApiToken`
+
+## Навигация по большим файлам
+
+`app.py` (~2150 строк) и `telegram_bot.py` (~1680 строк) — используй grep по сигнатурам:
+```bash
+grep -n "def \|async def \|class " app.py
+grep -n "BASE_PROTOCOLS\|_check_admin\|_manager_call\|get_protocol_manager" app.py
+```
+
+## Документация
+
+- Этот файл (`AGENTS.md`) — быстрый старт
+- `docs/ARCHITECTURE.md` — глубокий SSOT: middleware, протоколы, SSH-слой, безопасность, паттерн расширения протокола (7-шаговый чек-лист в §13)
+- Если изменение меняет поведение, сигнатуры или структуру — обнови соответствующий документ

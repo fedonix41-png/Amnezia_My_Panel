@@ -301,6 +301,7 @@ exit 1
         return self.ssh.run_sudo_command(f"sh -c {_q(wait_script)}", timeout=330)
 
     def install_protocol(self, protocol_type='nginx', port=None, email=None, domain=None):
+        if port is not None: port = int(port)
         if not self.check_docker_installed():
             return {'status': 'error', 'message': 'Docker not installed'}
 

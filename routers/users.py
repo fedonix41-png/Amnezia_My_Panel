@@ -119,7 +119,7 @@ async def api_list_users(request: Request, search: str = '', page: int = 1, size
 
 @router.post('/api/users/add', tags=["Users"])
 async def api_add_user(request: Request, req: AddUserRequest, db: AsyncSession = Depends(get_db)):
-    cur = await app_module.get_current_user(db, request)
+    cur = await app_module._check_admin(db, request)
     if not cur or cur.role != 'admin':
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
@@ -249,7 +249,7 @@ async def api_update_user(request: Request, user_id: str, req: UpdateUserRequest
 
 @router.post('/api/users/{user_id}/delete', tags=["Users"])
 async def api_delete_user(request: Request, user_id: str, db: AsyncSession = Depends(get_db)):
-    cur = await app_module.get_current_user(db, request)
+    cur = await app_module._check_admin(db, request)
     if not cur or cur.role != 'admin':
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     lang = request.cookies.get('lang', 'ru')
@@ -267,7 +267,7 @@ async def api_delete_user(request: Request, user_id: str, db: AsyncSession = Dep
 
 @router.post('/api/users/{user_id}/toggle', tags=["Users"])
 async def api_toggle_user(request: Request, user_id: str, req: ToggleUserRequest, db: AsyncSession = Depends(get_db)):
-    cur = await app_module.get_current_user(db, request)
+    cur = await app_module._check_admin(db, request)
     if not cur or cur.role != 'admin':
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:

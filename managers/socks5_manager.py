@@ -147,6 +147,7 @@ class Socks5Manager:
     # ===================== INSTALL / UPDATE / REMOVE =====================
 
     def install_protocol(self, protocol_type='socks5', port=None, username=None, password=None):
+        if port is not None: port = int(port)
         if not self.check_docker_installed():
             return {'status': 'error', 'message': 'Docker not installed'}
 

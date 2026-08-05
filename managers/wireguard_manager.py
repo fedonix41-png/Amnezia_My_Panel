@@ -138,6 +138,7 @@ iptables -C FORWARD -j DOCKER-USER 2>/dev/null || iptables -A FORWARD -j DOCKER-
         return True
 
     def install_protocol(self, port=None):
+        if port is not None: port = int(port)
         """
         Full installation of WireGuard protocol.
         Steps: install docker -> prepare host -> build container ->

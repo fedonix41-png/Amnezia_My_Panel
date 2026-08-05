@@ -51,10 +51,11 @@ class TelemtManager:
 
     def _api_request(self, method, path, data=None):
         """Execute a curl request inside the docker container."""
+        import shlex
         cmd = f"docker exec {self.container_name} curl -s -X {method} {self.API_URL}{path}"
         if data:
-            js_data = json.dumps(data).replace('"', '\\"')
-            cmd += f" -H 'Content-Type: application/json' -d \"{js_data}\""
+            js_data = shlex.quote(json.dumps(data))
+            cmd += f" -H 'Content-Type: application/json' -d {js_data}"
         
         out, err, code = self.ssh.run_sudo_command(cmd)
         if code != 0:
@@ -161,6 +162,7 @@ docker compose version
             raise RuntimeError(f"Failed to install docker compose plugin: {err or out}")
 
     def install_protocol(self, protocol_type='telemt', port='443', tls_emulation=True, tls_domain="", max_connections=0):
+        if port is not None: port = int(port)
         results = []
         if not self.check_docker_installed():
             results.append("Installing Docker...")
