@@ -23,6 +23,7 @@ pillow==12.1.1
 pycparser==3.0
 pydantic==2.12.5
 pydantic_core==2.41.5
+posthog==7.37.3
 PyNaCl==1.6.2
 python-dotenv==1.2.2
 python-multipart==0.0.20

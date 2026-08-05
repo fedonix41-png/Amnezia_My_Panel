@@ -1,3 +1,4 @@
+import atexit
 import os
 import sys
 import json
@@ -37,13 +38,30 @@ import httpx
 # validation of SECRET_KEY / MASTER_KEY — must run before SessionMiddleware.
 import config
 
+# PostHog is a single process-wide client. Route modules should import
+# `posthog_client` from this module rather than constructing clients themselves.
+posthog_client = None
+if config.POSTHOG_PROJECT_TOKEN and config.POSTHOG_HOST:
+    from posthog import Posthog
+
+    posthog_client = Posthog(
+        config.POSTHOG_PROJECT_TOKEN,
+        host=config.POSTHOG_HOST,
+        enable_exception_autocapture=True,
+    )
+    atexit.register(posthog_client.shutdown)
+
 # Rate limiter (module-level so route decorators can reference it).
 from slowapi import Limiter, _rate_limit_exceeded_handler
 
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from middleware import CsrfCookieMiddleware, SecurityHeadersMiddleware
+from middleware import (
+    CsrfCookieMiddleware,
+    PostHogRequestContextMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 limiter = Limiter(key_func=config._rate_limit_key, default_limits=[])
 
@@ -102,13 +120,6 @@ async def custom_redoc():
         redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js",
         with_google_fonts=False,
     )
-app.add_middleware(
-    SessionMiddleware,
-    secret_key=config.SECRET_KEY,
-    https_only=config.SESSION_COOKIE_SECURE,
-    same_site=config.SESSION_COOKIE_SAMESITE,
-)
-
 # Ensure 'app' module alias exists in sys.modules when app.py is executed as __main__
 import sys
 sys.modules['app'] = sys.modules[__name__]
@@ -127,7 +138,17 @@ sys.modules['app'] = sys.modules[__name__]
 
 
 # Middleware are added innermost-first; the last add_middleware is outermost.
-# Outer → inner order: TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session.
+# Outer → inner order: TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session → PostHog.
+# SessionMiddleware must wrap the PostHog context so it can read the authenticated
+# user ID before entering the request-scoped SDK context.
+if posthog_client:
+    app.add_middleware(PostHogRequestContextMiddleware, posthog_client=posthog_client)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SECRET_KEY,
+    https_only=config.SESSION_COOKIE_SECURE,
+    same_site=config.SESSION_COOKIE_SAMESITE,
+)
 app.add_middleware(CsrfCookieMiddleware)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
@@ -135,6 +156,19 @@ app.add_middleware(SecurityHeadersMiddleware)
 # RateLimitExceeded → JSON 429 handler.
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(Exception)
+async def capture_unhandled_exception(request: Request, exc: Exception):
+    """Capture uncaught server errors before returning FastAPI's generic 500 response."""
+    if posthog_client:
+        with posthog_client.new_context(fresh=True):
+            distinct_id = request.session.get("user_id")
+            if distinct_id:
+                posthog_client.identify_context(str(distinct_id))
+            posthog_client.capture_exception(exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
 
 # TrustedHost: reject foreign Host headers. Skipped in dev so LAN/IP access
 # during local testing is not blocked.
@@ -1433,6 +1467,18 @@ async def get_current_user(db, request: Request):
     return await db.get(models.User, user_id)
 
 
+def capture_posthog_event(request: Request, actor, event: str, properties=None):
+    """Capture an action with bearer-token attribution when required."""
+    if not posthog_client:
+        return
+    if request.headers.get('Authorization', '').lower().startswith('bearer '):
+        with posthog_client.new_context(fresh=True):
+            posthog_client.identify_context(str(actor.id))
+            posthog_client.capture(event, properties=properties)
+    else:
+        posthog_client.capture(event, properties=properties)
+
+
 async def _check_admin(db, request: Request):
     user = await get_current_user(db, request)
     if user and user.role in ('admin', 'support'):
@@ -2134,6 +2180,8 @@ async def _app_lifespan(app):
         await tg_bot.stop_bot()
     except Exception as e:
         logger.warning("Error stopping Telegram bot: %s", e)
+    if posthog_client:
+        await asyncio.to_thread(posthog_client.shutdown)
 
 
 app.router.lifespan_context = _app_lifespan

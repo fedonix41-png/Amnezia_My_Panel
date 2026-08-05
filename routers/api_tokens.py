@@ -73,6 +73,7 @@ async def api_create_token(request: Request, req: CreateApiTokenRequest, db: Asy
     db.add(token_obj)
     await db.commit()
 
+    app_module.capture_posthog_event(request, cur, "api_token_created")
     return {
         'status': 'success',
         'id': token_id,
@@ -100,5 +101,6 @@ async def api_revoke_token(request: Request, token_id: str, db: AsyncSession = D
         
     await db.delete(token_obj)
     await db.commit()
-    
+
+    app_module.capture_posthog_event(request, cur, "api_token_revoked")
     return {'status': 'success'}

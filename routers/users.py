@@ -202,6 +202,15 @@ async def api_add_user(request: Request, req: AddUserRequest, db: AsyncSession =
                         result['config'] = conn_result['config']
                         result['vpn_link'] = app_module.generate_vpn_link(conn_result['config'])
                         result['qr_content'] = app_module.generate_qr_content(conn_result['config'])
+        app_module.capture_posthog_event(
+            request,
+            cur,
+            "user_created",
+            {
+                "role": new_user.role,
+                "connection_created": bool(result.get("connection_created")),
+            },
+        )
         return result
     except Exception as e:
         app_module.logger.exception("Error adding user")
@@ -274,6 +283,9 @@ async def api_toggle_user(request: Request, user_id: str, req: ToggleUserRequest
         success = await app_module.perform_toggle_user(db, user_id, req.enabled)
         if not success:
             return JSONResponse({'error': 'User not found'}, status_code=404)
+        app_module.capture_posthog_event(
+            request, cur, "user_status_changed", {"enabled": req.enabled}
+        )
         return {'status': 'success', 'enabled': req.enabled}
     except Exception as e:
         app_module.logger.exception("Error toggling user")

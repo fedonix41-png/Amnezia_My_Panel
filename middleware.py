@@ -54,6 +54,35 @@ def _is_exempt(path: str) -> bool:
     return any(path == p or path.startswith(p) for p in _EXEMPT_PREFIXES)
 
 
+class PostHogRequestContextMiddleware(BaseHTTPMiddleware):
+    """Bind the authenticated panel user to PostHog for one request.
+
+    The SDK context scopes every capture and automatically captured exception
+    during the request to the panel user's stable database ID. Analytics tracing
+    headers are used only when no authenticated session is available.
+    """
+
+    def __init__(self, app, posthog_client):
+        super().__init__(app)
+        self.posthog_client = posthog_client
+
+    async def dispatch(self, request, call_next):
+        with self.posthog_client.new_context(fresh=True):
+            distinct_id = request.session.get("user_id")
+            if distinct_id:
+                self.posthog_client.identify_context(str(distinct_id))
+            else:
+                traced_distinct_id = request.headers.get("X-POSTHOG-DISTINCT-ID")
+                if traced_distinct_id:
+                    self.posthog_client.identify_context(traced_distinct_id)
+
+            session_id = request.headers.get("X-POSTHOG-SESSION-ID")
+            if session_id:
+                self.posthog_client.set_context_session(session_id)
+
+            return await call_next(request)
+
+
 class CsrfCookieMiddleware(BaseHTTPMiddleware):
     """Double-submit CSRF protection.
 
