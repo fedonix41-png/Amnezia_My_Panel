@@ -1736,6 +1736,44 @@ async def _startup():
         await UserRepository.ensure_default_admin(db)
         
         settings_dict = await SettingRepository.get(db, 'settings', default={})
+        
+        changed = False
+        if 'appearance' not in settings_dict:
+            settings_dict['appearance'] = {
+                'title': 'Amnezia Web Panel',
+                'theme': 'dark',
+                'accent': '#5865F2',
+                'logo': '',
+                'subtitle': ''
+            }
+            changed = True
+            
+        if 'sync' not in settings_dict:
+            settings_dict['sync'] = {
+                'remnawave_enabled': False,
+                'remnawave_url': '',
+                'remnawave_api_token': '',
+                'remnawave_server_id': 0,
+                'remnawave_sync_interval': 10,
+                'remnawave_sync_users': False,
+                'remnawave_sync_servers': False
+            }
+            changed = True
+            
+        if 'captcha' not in settings_dict:
+            settings_dict['captcha'] = {
+                'enabled': False
+            }
+            changed = True
+            
+        if 'telegram' not in settings_dict:
+            settings_dict['telegram'] = {
+                'enabled': False,
+                'token': '',
+                'admin_ids': ''
+            }
+            changed = True
+
         if 'ssl' not in settings_dict:
             settings_dict['ssl'] = {
                 'enabled': False,
@@ -1746,8 +1784,11 @@ async def _startup():
                 'key_text': '',
                 'panel_port': 5000
             }
+            changed = True
+            
+        if changed:
             await SettingRepository.set(db, 'settings', settings_dict)
-            logger.info("Migrated SSL settings")
+            logger.info("Migrated/initialized default settings")
 
         # Telegram
         tg_cfg = settings_dict.get('telegram', {})

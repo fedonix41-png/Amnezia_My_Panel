@@ -35,13 +35,11 @@
             <div class="server-protocols" id="server-protocols-{{ server.id }}">
                 {% if server.protocols %}
                 {% for proto_key, proto_val in server.protocols.items() %}
-                {% if proto_val.get('installed') %}
                 <span class="badge badge-success">
                     <span class="badge-dot"></span>
                     {{ 'AWG' if proto_key == 'awg' else ('AWG-Legacy' if proto_key == 'awg_legacy' else ('Xray' if
                     proto_key == 'xray' else proto_key | upper)) }}
                 </span>
-                {% endif %}
                 {% endfor %}
                 {% else %}
                 <span class="badge badge-warn">

@@ -84,7 +84,7 @@ class ServerProtocol(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     server_id: Mapped[int] = mapped_column(ForeignKey("servers.id", ondelete="CASCADE"), index=True)
     protocol_type: Mapped[str] = mapped_column(String(50), index=True)
-    installed: Mapped[bool] = mapped_column(Boolean, default=False)
+    installed: Mapped[bool] = mapped_column(Boolean, default=True)
     port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     base_protocol: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     instance: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
