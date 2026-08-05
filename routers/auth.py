@@ -66,6 +66,20 @@ async def api_login(request: Request, req: LoginRequest, db: AsyncSession = Depe
         if not u.enabled:
             return JSONResponse({'error': app_module._t('account_disabled', lang)}, status_code=403)
         request.session['user_id'] = u.id
+        if app_module.posthog_client:
+            with app_module.posthog_client.new_context(fresh=True):
+                app_module.posthog_client.identify_context(str(u.id))
+                app_module.posthog_client.set(
+                    distinct_id=str(u.id),
+                    properties={
+                        "username": u.username,
+                        "role": u.role,
+                        "email": u.email,
+                    },
+                )
+                app_module.posthog_client.capture(
+                    "user_logged_in", properties={"role": u.role}
+                )
         return {'status': 'success', 'role': u.role}
     
     lang = request.cookies.get('lang', 'ru')

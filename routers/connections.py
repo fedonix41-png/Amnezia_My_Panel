@@ -90,7 +90,8 @@ async def api_get_connections(request: Request, server_id: int, protocol: str = 
 
 @router.post('/api/servers/{server_id}/connections/add')
 async def api_add_connection(request: Request, server_id: int, req: AddConnectionRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await ServerRepository.get_by_id(db, server_id)
@@ -140,6 +141,12 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
             db.add(conn)
             await db.commit()
 
+        app_module.capture_posthog_event(
+            request,
+            actor,
+            "connection_added",
+            {"protocol": app_module.protocol_base(req.protocol)},
+        )
         return result
     except Exception as e:
         app_module.logger.exception("Error adding connection")
@@ -148,7 +155,8 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
 
 @router.post('/api/servers/{server_id}/connections/remove')
 async def api_remove_connection(request: Request, server_id: int, req: ConnectionActionRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await ServerRepository.get_by_id(db, server_id)
@@ -170,7 +178,13 @@ async def api_remove_connection(request: Request, server_id: int, req: Connectio
         for c in res.scalars().all():
             await db.delete(c)
         await db.commit()
-        
+
+        app_module.capture_posthog_event(
+            request,
+            actor,
+            "connection_removed",
+            {"protocol": app_module.protocol_base(req.protocol)},
+        )
         return {'status': 'success'}
     except Exception as e:
         app_module.logger.exception("Error removing connection")
@@ -244,6 +258,11 @@ async def api_get_connection_config(request: Request, server_id: int, req: Conne
         ssh.disconnect()
         vpn_link = app_module.generate_vpn_link(config) if config else ''
         qr_content = app_module.generate_qr_content(config) if config else ''
+        if app_module.posthog_client:
+            app_module.posthog_client.capture(
+                "vpn_config_requested",
+                properties={"protocol": app_module.protocol_base(req.protocol)},
+            )
         return {'config': config, 'vpn_link': vpn_link, 'qr_content': qr_content}
     except Exception as e:
         app_module.logger.exception("Error getting connection config")
@@ -252,7 +271,8 @@ async def api_get_connection_config(request: Request, server_id: int, req: Conne
 
 @router.post('/api/servers/{server_id}/connections/toggle')
 async def api_toggle_connection(request: Request, server_id: int, req: ToggleConnectionRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await ServerRepository.get_by_id(db, server_id)
@@ -266,6 +286,15 @@ async def api_toggle_connection(request: Request, server_id: int, req: ToggleCon
         app_module._manager_call(manager, 'toggle_client', req.protocol, req.client_id, req.enable)
         ssh.disconnect()
         status = 'enabled' if req.enable else 'disabled'
+        app_module.capture_posthog_event(
+            request,
+            actor,
+            "connection_status_changed",
+            {
+                "protocol": app_module.protocol_base(req.protocol),
+                "enabled": req.enable,
+            },
+        )
         return {'status': 'success', 'enabled': req.enable, 'message': f'Connection {status}'}
     except Exception as e:
         app_module.logger.exception("Error toggling connection")

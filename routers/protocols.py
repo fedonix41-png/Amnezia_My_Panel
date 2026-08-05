@@ -68,7 +68,8 @@ class BackupDownloadRequest(BaseModel):
 
 @router.post('/api/servers/{server_id}/install')
 async def api_install_protocol(request: Request, server_id: int, req: InstallProtocolRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await db.get(models.Server, server_id)
@@ -187,6 +188,9 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
         result['display_name'] = proto_record.display_name
         result['container_name'] = proto_record.container_name
         ssh.disconnect()
+        app_module.capture_posthog_event(
+            request, actor, "protocol_installed", {"protocol": install_base}
+        )
         return result
     except Exception as e:
         app_module.logger.exception("Error installing protocol")
@@ -255,7 +259,8 @@ async def api_socks5_update_credentials(request: Request, server_id: int, req: S
 
 @router.post('/api/servers/{server_id}/uninstall')
 async def api_uninstall_protocol(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await db.get(models.Server, server_id)
@@ -278,6 +283,9 @@ async def api_uninstall_protocol(request: Request, server_id: int, req: Protocol
             await db.commit()
             
         ssh.disconnect()
+        app_module.capture_posthog_event(
+            request, actor, "protocol_uninstalled", {"protocol": base}
+        )
         return {'status': 'success'}
     except Exception as e:
         app_module.logger.exception("Error uninstalling protocol")
@@ -311,7 +319,8 @@ async def api_protocol_backups_list(request: Request, server_id: int, req: Proto
 
 @router.post('/api/servers/{server_id}/backups/create')
 async def api_protocol_backup_create(request: Request, server_id: int, req: ProtocolRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     if not app_module.is_valid_protocol(req.protocol):
         return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
@@ -328,6 +337,12 @@ async def api_protocol_backup_create(request: Request, server_id: int, req: Prot
         result = BackupManager(ssh).create_backup(req.protocol, container)
         if result.get('status') == 'error':
             return JSONResponse({'error': result.get('message', 'Failed to create backup')}, status_code=500)
+        app_module.capture_posthog_event(
+            request,
+            actor,
+            "protocol_backup_created",
+            {"protocol": app_module.protocol_base(req.protocol)},
+        )
         return result
     except Exception as e:
         app_module.logger.exception("Error creating protocol backup")

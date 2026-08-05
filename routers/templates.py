@@ -36,6 +36,8 @@ async def set_lang(lang: str, request: Request):
 
 @router.get('/logout')
 async def logout(request: Request):
+    if app_module.posthog_client:
+        app_module.posthog_client.capture("user_logged_out")
     request.session.clear()
     return RedirectResponse(url='/login', status_code=302)
 

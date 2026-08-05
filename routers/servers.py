@@ -42,7 +42,8 @@ class ReorderServersRequest(BaseModel):
 
 @router.post('/api/servers/add')
 async def api_add_server(request: Request, req: AddServerRequest, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         host = req.host.strip()
@@ -77,7 +78,8 @@ async def api_add_server(request: Request, req: AddServerRequest, db: AsyncSessi
         db.add(server)
         await db.commit()
         await db.refresh(server)
-        
+
+        app_module.capture_posthog_event(request, actor, "server_added")
         return {'status': 'success', 'server_id': server.id, 'server_info': server_info}
     except Exception as e:
         app_module.logger.exception("Error adding server")
@@ -199,7 +201,8 @@ async def api_reorder_servers(request: Request, req: ReorderServersRequest, db: 
 
 @router.post('/api/servers/{server_id}/delete')
 async def api_delete_server(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await ServerRepository.get_by_id(db, server_id)
@@ -208,6 +211,7 @@ async def api_delete_server(request: Request, server_id: int, db: AsyncSession =
             
         await db.delete(server)
         await db.commit()
+        app_module.capture_posthog_event(request, actor, "server_deleted")
         return {'status': 'success'}
     except Exception as e:
         return JSONResponse({'error': str(e)}, status_code=500)
@@ -215,7 +219,8 @@ async def api_delete_server(request: Request, server_id: int, db: AsyncSession =
 
 @router.post('/api/servers/{server_id}/reboot')
 async def api_reboot_server(request: Request, server_id: int, db: AsyncSession = Depends(get_db)):
-    if not await app_module._check_admin(db, request):
+    actor = await app_module._check_admin(db, request)
+    if not actor:
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
         server = await ServerRepository.get_by_id(db, server_id)
@@ -232,6 +237,7 @@ async def api_reboot_server(request: Request, server_id: int, db: AsyncSession =
             ssh.disconnect()
         except:
             pass
+        app_module.capture_posthog_event(request, actor, "server_reboot_requested")
         return {'status': 'success'}
     except Exception as e:
         app_module.logger.exception("Error rebooting server")

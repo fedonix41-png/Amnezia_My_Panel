@@ -113,6 +113,24 @@ else:
 
 
 # ---------------------------------------------------------------------------
+# PostHog analytics
+# ---------------------------------------------------------------------------
+POSTHOG_PROJECT_TOKEN = (os.environ.get("POSTHOG_PROJECT_TOKEN") or "").strip()
+POSTHOG_HOST = (os.environ.get("POSTHOG_HOST") or "").strip()
+
+if AWP_DEV:
+    for _posthog_variable, _posthog_value in (
+        ("POSTHOG_PROJECT_TOKEN", POSTHOG_PROJECT_TOKEN),
+        ("POSTHOG_HOST", POSTHOG_HOST),
+    ):
+        if not _posthog_value:
+            raise RuntimeError(
+                f"{_posthog_variable} variable required by PostHog is missing or "
+                f"un-configured, this causes events to be silently missed. This error "
+                f"stops appearing once {_posthog_variable} is configured"
+            )
+
+# ---------------------------------------------------------------------------
 # Networking
 # ---------------------------------------------------------------------------
 APP_PORT = int(os.environ.get("APP_PORT", "5000") or 5000)
