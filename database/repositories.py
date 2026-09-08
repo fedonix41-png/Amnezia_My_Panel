@@ -17,8 +17,10 @@ def utcnow():
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
-    h = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
-    return f"{salt}${h.hex()}"
+    iterations = 600000
+    h = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations)
+    return f"{iterations}${salt}${h.hex()}"
+
 
 class UserRepository:
     @staticmethod

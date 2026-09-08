@@ -1134,28 +1134,6 @@ def _generate_api_token() -> str:
     return f"{API_TOKEN_PREFIX}{secrets.token_urlsafe(32)}"
 
 
-def _resolve_api_token(data: dict, raw_token: str):
-    """Match a raw bearer token against stored hashes. Returns the user record
-    that owns the token, or None if the token is unknown / its owner is gone /
-    its owner is no longer admin-or-support."""
-    if not raw_token:
-        return None
-    token_hash = _hash_api_token(raw_token)
-    entry = next(
-        (t for t in data.get('api_tokens', []) if t.get('token_hash') == token_hash),
-        None,
-    )
-    if not entry:
-        return None
-    user = next((u for u in data.get('users', []) if u['id'] == entry.get('user_id')), None)
-    if not user:
-        return None
-    # Disabled or downgraded admins should not have a working token any more.
-    if not user.get('enabled', True):
-        return None
-    if user.get('role') not in ('admin', 'support'):
-        return None
-    return (entry, user)
 
 
 def _touch_api_token(token_entry: dict) -> bool:
@@ -1849,11 +1827,17 @@ async def _startup():
 
 def _scrape_server_traffic(server, sid, my_conns):
     server_updates = []
+    ssh = get_ssh(server)
     try:
-        ssh = get_ssh(server)
         ssh.connect()
+        if hasattr(server, 'protocols'):
+            active_protos = {p.protocol_type: {} for p in server.protocols}
+        elif isinstance(server, dict):
+            active_protos = server.get('protocols', {})
+        else:
+            active_protos = {}
         for proto in ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'wireguard']:
-            if proto in server.get('protocols', {}):
+            if proto in active_protos:
                 manager = get_protocol_manager(ssh, proto)
                 clients = _manager_call(manager, 'get_clients', proto)
                 client_bytes = {}
@@ -1868,10 +1852,15 @@ def _scrape_server_traffic(server, sid, my_conns):
                         last_bytes = uc.get('last_bytes') or 0
                         delta = curr_bytes - last_bytes if curr_bytes >= last_bytes else curr_bytes
                         server_updates.append((uc['id'], delta, curr_bytes))
-        ssh.disconnect()
     except Exception as e:
         logger.error(f"Traffic sync err server {sid}: {e}")
+    finally:
+        try:
+            ssh.disconnect()
+        except Exception:
+            pass
     return server_updates
+
 
 
 async def _background_backup():
@@ -1933,21 +1922,15 @@ async def periodic_background_tasks():
                 updates = []
                 for srv in servers:
                     if srv.id not in conns_by_server: continue
-                    # Transform server and conns to dicts for _scrape_server_traffic
-                    srv_dict = {
-                        "host": srv.host, "ssh_port": srv.ssh_port, "username": srv.username,
-                        "password": srv.password, "private_key": srv.private_key,
-                        "protocols": {p.protocol_type: {} for p in srv.protocols}
-                    }
                     conns_dict = [{"id": uc.id, "protocol": uc.protocol, "client_id": uc.client_id, "last_bytes": uc.last_bytes} for uc in conns_by_server[srv.id]]
-                    server_updates = await asyncio.to_thread(_scrape_server_traffic, srv_dict, srv.id, conns_dict)
+                    server_updates = await asyncio.to_thread(_scrape_server_traffic, srv, srv.id, conns_dict)
                     if server_updates:
                         updates.extend(server_updates)
                         
                 to_disable_uids = []
                 from datetime import timezone
                 now_utc = datetime.now(timezone.utc)
-                now_local = datetime.now()
+
                 
                 if updates:
                     for uc_id, delta, curr_bytes in updates:

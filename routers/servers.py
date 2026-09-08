@@ -56,12 +56,17 @@ async def api_add_server(request: Request, req: AddServerRequest, db: AsyncSessi
 
         ssh = SSHManager(host, req.ssh_port, username, req.password, req.private_key)
         try:
-            ssh.connect()
-            server_info = ssh.test_connection()
+            await asyncio.to_thread(ssh.connect)
+            server_info = await asyncio.to_thread(ssh.test_connection)
             host_fingerprint = ssh.host_fingerprint
-            ssh.disconnect()
         except Exception as e:
             return JSONResponse({'error': f'Connection failed: {str(e)}'}, status_code=400)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
 
         # Get the max display_order
         stmt = select(models.Server).order_by(models.Server.display_order.desc()).limit(1)
@@ -115,12 +120,17 @@ async def api_edit_server(request: Request, server_id: int, req: EditServerReque
         ssh = SSHManager(new_host, new_port, new_user, plain_pass, plain_key,
                          host_fingerprint=expected_fp)
         try:
-            ssh.connect()
-            server_info = ssh.test_connection()
+            await asyncio.to_thread(ssh.connect)
+            server_info = await asyncio.to_thread(ssh.test_connection)
             host_fingerprint = ssh.host_fingerprint
-            ssh.disconnect()
         except Exception as e:
             return JSONResponse({'error': f'Connection failed: {e}'}, status_code=400)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
 
         server.name = new_name
         server.host = new_host
@@ -228,15 +238,17 @@ async def api_reboot_server(request: Request, server_id: int, db: AsyncSession =
             return JSONResponse({'error': 'Server not found'}, status_code=404)
             
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
         try:
-            ssh.run_sudo_command("nohup reboot > /dev/null 2>&1 &")
-        except Exception:
-            pass            
-        try:
-            ssh.disconnect()
-        except:
-            pass
+            await asyncio.to_thread(ssh.connect)
+            try:
+                await asyncio.to_thread(ssh.run_sudo_command, "nohup reboot > /dev/null 2>&1 &")
+            except Exception:
+                pass
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
         app_module.capture_posthog_event(request, actor, "server_reboot_requested")
         return {'status': 'success'}
     except Exception as e:
@@ -254,8 +266,9 @@ async def api_clear_server(request: Request, server_id: int, db: AsyncSession = 
             return JSONResponse({'error': 'Server not found'}, status_code=404)
             
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        cleanup_script = r"""
+        try:
+            await asyncio.to_thread(ssh.connect)
+            cleanup_script = r"""
 for c in $(docker ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^(amnezia-|telemt$)'); do
     docker stop "$c" >/dev/null 2>&1 || true
     docker rm -fv "$c" >/dev/null 2>&1 || true
@@ -268,16 +281,22 @@ done
 docker network rm amnezia-dns-net >/dev/null 2>&1 || true
 rm -rf /opt/amnezia
 """
-        ssh.run_sudo_script(cleanup_script, timeout=120)
+            await asyncio.to_thread(ssh.run_sudo_script, cleanup_script, timeout=120)
 
-        # Remove all protocols from DB
-        stmt = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id)
-        res = await db.execute(stmt)
-        for p in res.scalars().all():
-            await db.delete(p)
-            
-        await db.commit()
-        ssh.disconnect()
+            # Remove all protocols from DB
+            stmt = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id)
+            res = await db.execute(stmt)
+            for p in res.scalars().all():
+                await db.delete(p)
+                
+            await db.commit()
+            return {'status': 'success'}
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
         return {'status': 'success'}
     except Exception as e:
         app_module.logger.exception("Error clearing server")
@@ -297,44 +316,52 @@ async def api_server_stats(request: Request, server_id: int, cached: bool = Fals
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        stats = {}
-        out, _, _ = ssh.run_command(
-            "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1 2>/dev/null || "
-            "awk '{u=$2+$4; t=$2+$4+$5; if(NR==1){pu=u;pt=t} else printf \"%.1f\", (u-pu)/(t-pt)*100}' "
-            "<(grep 'cpu ' /proc/stat) <(sleep 0.5 && grep 'cpu ' /proc/stat) 2>/dev/null"
-        )
-        try:
-            stats['cpu'] = round(float(out.strip().split('\n')[0]), 1)
-        except (ValueError, IndexError):
-            stats['cpu'] = 0
-        out, _, _ = ssh.run_command("free -b | awk 'NR==2{printf \"%d %d\", $3, $2}'")
-        try:
-            parts = out.strip().split()
-            used, total = int(parts[0]), int(parts[1])
-            stats.update(ram_used=used, ram_total=total, ram_percent=round(used / total * 100, 1) if total > 0 else 0)
-        except (ValueError, IndexError):
-            stats.update(ram_used=0, ram_total=0, ram_percent=0)
-        out, _, _ = ssh.run_command("df -B1 / | awk 'NR==2{printf \"%d %d\", $3, $2}'")
-        try:
-            parts = out.strip().split()
-            used, total = int(parts[0]), int(parts[1])
-            stats.update(disk_used=used, disk_total=total, disk_percent=round(used / total * 100, 1) if total > 0 else 0)
-        except (ValueError, IndexError):
-            stats.update(disk_used=0, disk_total=0, disk_percent=0)
-        out, _, _ = ssh.run_command(
-            "DEV=$(ip route | awk '/default/ {print $5}' | head -1); "
-            "cat /proc/net/dev | awk -v dev=\"$DEV:\" '$1==dev{printf \"%d %d\", $2, $10}'"
-        )
-        try:
-            parts = out.strip().split()
-            stats['net_rx'], stats['net_tx'] = int(parts[0]), int(parts[1])
-        except (ValueError, IndexError):
-            stats['net_rx'] = stats['net_tx'] = 0
-        out, _, _ = ssh.run_command("uptime -p 2>/dev/null || uptime")
-        stats['uptime'] = out.strip()
-        ssh.disconnect()
-        return stats
+        def _fetch_stats(ssh_conn):
+            try:
+                ssh_conn.connect()
+                stats = {}
+                out, _, _ = ssh_conn.run_command(
+                    "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1 2>/dev/null || "
+                    "awk '{u=$2+$4; t=$2+$4+$5; if(NR==1){pu=u;pt=t} else printf \"%.1f\", (u-pu)/(t-pt)*100}' "
+                    "<(grep 'cpu ' /proc/stat) <(sleep 0.5 && grep 'cpu ' /proc/stat) 2>/dev/null"
+                )
+                try:
+                    stats['cpu'] = round(float(out.strip().split('\n')[0]), 1)
+                except (ValueError, IndexError):
+                    stats['cpu'] = 0
+                out, _, _ = ssh_conn.run_command("free -b | awk 'NR==2{printf \"%d %d\", $3, $2}'")
+                try:
+                    parts = out.strip().split()
+                    used, total = int(parts[0]), int(parts[1])
+                    stats.update(ram_used=used, ram_total=total, ram_percent=round(used / total * 100, 1) if total > 0 else 0)
+                except (ValueError, IndexError):
+                    stats.update(ram_used=0, ram_total=0, ram_percent=0)
+                out, _, _ = ssh_conn.run_command("df -B1 / | awk 'NR==2{printf \"%d %d\", $3, $2}'")
+                try:
+                    parts = out.strip().split()
+                    used, total = int(parts[0]), int(parts[1])
+                    stats.update(disk_used=used, disk_total=total, disk_percent=round(used / total * 100, 1) if total > 0 else 0)
+                except (ValueError, IndexError):
+                    stats.update(disk_used=0, disk_total=0, disk_percent=0)
+                out, _, _ = ssh_conn.run_command(
+                    "DEV=$(ip route | awk '/default/ {print $5}' | head -1); "
+                    "cat /proc/net/dev | awk -v dev=\"$DEV:\" '$1==dev{printf \"%d %d\", $2, $10}'"
+                )
+                try:
+                    parts = out.strip().split()
+                    stats['net_rx'], stats['net_tx'] = int(parts[0]), int(parts[1])
+                except (ValueError, IndexError):
+                    stats['net_rx'] = stats['net_tx'] = 0
+                out, _, _ = ssh_conn.run_command("uptime -p 2>/dev/null || uptime")
+                stats['uptime'] = out.strip()
+                return stats
+            finally:
+                try:
+                    ssh_conn.disconnect()
+                except Exception:
+                    pass
+
+        return await asyncio.to_thread(_fetch_stats, ssh)
     except Exception as e:
         app_module.logger.exception("Error getting server stats")
         return JSONResponse({'error': str(e)}, status_code=500)
@@ -345,18 +372,16 @@ async def api_check_server(request: Request, server_id: int, cached: bool = Fals
     if not await app_module._check_admin(db, request):
         return JSONResponse({'error': 'Forbidden'}, status_code=403)
     try:
-        stmt = select(models.Server).where(models.Server.id == server_id)
-        res = await db.execute(stmt)
-        server = res.scalar_one_or_none()
+        server = await ServerRepository.get_by_id(db, server_id)
         if not server:
             return JSONResponse({'error': 'Server not found'}, status_code=404)
 
-        stmt_protos = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id)
-        res_protos = await db.execute(stmt_protos)
-        db_protocols = {p.protocol_type: p for p in res_protos.scalars().all()}
+        stmt = select(models.ServerProtocol).where(models.ServerProtocol.server_id == server_id)
+        res = await db.execute(stmt)
+        db_protocols = {p.protocol_type: p for p in res.scalars().all()}
 
         if cached:
-            status = {'connection': 'cached', 'docker_installed': True, 'protocols': {}}
+            status = {'connection': 'ok', 'docker_installed': True, 'protocols': {}}
             for proto, p in db_protocols.items():
                 info = {
                     'protocol': proto,
@@ -382,120 +407,126 @@ async def api_check_server(request: Request, server_id: int, cached: bool = Fals
             return status
 
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, 'awg')
-        status = {'connection': 'ok', 'docker_installed': manager.check_docker_installed(), 'protocols': {}}
-        
-        changed = False
-
-        def merge_saved_protocol_status(proto, result=None, error=None):
-            db_proto = db_protocols.get(proto)
-            merged = dict(result or {})
-            merged.setdefault('protocol', proto)
-            if error:
-                merged['error'] = error
-            if db_proto:
-                if not merged.get('port') and db_proto.port:
-                    merged['port'] = db_proto.port
-                extra_params = db_proto.extra_params or {}
-                if extra_params.get('awg_params') and not merged.get('awg_params'):
-                    merged['awg_params'] = extra_params['awg_params']
-                merged['base_protocol'] = db_proto.base_protocol or app_module.protocol_base(proto)
-                merged['instance'] = db_proto.instance or app_module.protocol_instance(proto)
-                merged['display_name'] = db_proto.display_name or app_module.protocol_display_name(proto)
-                merged['container_name'] = db_proto.container_name or app_module.protocol_container_name(proto)
-                
-                settings = extra_params.get('settings', {})
-                if app_module.protocol_base(proto) == 'adguard':
-                    for key in ('web_port', 'mode', 'internal_ip', 'expose_web'):
-                        if settings.get(key) is not None:
-                            if key == 'web_port' and merged.get('web_exposed'):
-                                continue
-                            merged[key] = settings[key]
-                    if 'expose_web' in settings and 'web_exposed' not in merged:
-                        merged['web_exposed'] = bool(settings.get('expose_web'))
-                if app_module.protocol_base(proto) == 'nginx':
-                    for key in ('domain', 'email', 'site_url'):
-                        if settings.get(key) is not None:
-                            merged[key] = settings[key]
-            else:
-                merged['base_protocol'] = app_module.protocol_base(proto)
-                merged['instance'] = app_module.protocol_instance(proto)
-                merged['display_name'] = app_module.protocol_display_name(proto)
-                merged['container_name'] = app_module.protocol_container_name(proto)
-            return merged
-
-        def should_preserve_saved_protocol(proto, result=None, err=None):
-            if proto not in db_protocols:
-                return False
-            if app_module.protocol_base(proto) in app_module.MULTI_INSTANCE_PROTOCOLS and app_module.protocol_instance(proto) > 1:
-                return True
-            if err or (result and result.get('error')):
-                return True
-            return False
-
-        def check_proto(proto):
-            try:
-                p_manager = app_module.get_protocol_manager(ssh, proto)
-                result = app_module._manager_call(p_manager, 'get_server_status', proto)
-                return proto, merge_saved_protocol_status(proto, result), None
-            except Exception as e:
-                return proto, merge_saved_protocol_status(proto, {}, str(e)), str(e)
-
-        protocols_to_check = list(dict.fromkeys(app_module.BASE_PROTOCOLS + list(db_protocols.keys())))
-        for proto in protocols_to_check:
-            proto, result, err = check_proto(proto)
-            status['protocols'][proto] = result
-            if err:
-                continue
-            if result.get('container_exists'):
-                if proto not in db_protocols:
-                    new_proto = models.ServerProtocol(
-                        server_id=server.id,
-                        protocol_type=proto,
-                        port=int(result.get('port', 55424)) if result.get('port') else 55424,
-                        base_protocol=app_module.protocol_base(proto),
-                        instance=app_module.protocol_instance(proto),
-                        display_name=app_module.protocol_display_name(proto),
-                        container_name=app_module.protocol_container_name(proto)
-                    )
-                    settings = {}
-                    if app_module.protocol_base(proto) == 'adguard':
-                        settings.update({
-                            'mode': result.get('mode'),
-                            'internal_ip': result.get('internal_ip'),
-                            'web_port': result.get('web_port'),
-                            'expose_web': result.get('web_exposed'),
-                        })
-                    if app_module.protocol_base(proto) == 'nginx':
-                        settings.update({
-                            'domain': result.get('domain'),
-                            'email': result.get('email'),
-                            'site_url': result.get('site_url'),
-                        })
-                    new_proto.extra_params = {
-                        "awg_params": result.get('awg_params', {}),
-                        "settings": settings
-                    }
-                    db.add(new_proto)
-                    db_protocols[proto] = new_proto
-                    changed = True
-            else:
-                if proto in db_protocols:
-                    if should_preserve_saved_protocol(proto, result, err):
-                        status['protocols'][proto]['container_exists'] = True
-                        status['protocols'][proto].setdefault('container_running', False)
-                        status['protocols'][proto]['status_preserved'] = True
-                    else:
-                        await db.delete(db_protocols[proto])
-                        del db_protocols[proto]
-                        changed = True
-                
-        if changed:
-            await db.commit()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, 'awg')
+            docker_installed = await asyncio.to_thread(manager.check_docker_installed)
+            status = {'connection': 'ok', 'docker_installed': docker_installed, 'protocols': {}}
             
-        ssh.disconnect()
-        return status
+            changed = False
+
+            def merge_saved_protocol_status(proto, result=None, error=None):
+                db_proto = db_protocols.get(proto)
+                merged = dict(result or {})
+                merged.setdefault('protocol', proto)
+                if error:
+                    merged['error'] = error
+                if db_proto:
+                    if not merged.get('port') and db_proto.port:
+                        merged['port'] = db_proto.port
+                    extra_params = db_proto.extra_params or {}
+                    if extra_params.get('awg_params') and not merged.get('awg_params'):
+                        merged['awg_params'] = extra_params['awg_params']
+                    merged['base_protocol'] = db_proto.base_protocol or app_module.protocol_base(proto)
+                    merged['instance'] = db_proto.instance or app_module.protocol_instance(proto)
+                    merged['display_name'] = db_proto.display_name or app_module.protocol_display_name(proto)
+                    merged['container_name'] = db_proto.container_name or app_module.protocol_container_name(proto)
+                    
+                    settings = extra_params.get('settings', {})
+                    if app_module.protocol_base(proto) == 'adguard':
+                        for key in ('web_port', 'mode', 'internal_ip', 'expose_web'):
+                            if settings.get(key) is not None:
+                                if key == 'web_port' and merged.get('web_exposed'):
+                                    continue
+                                merged[key] = settings[key]
+                        if 'expose_web' in settings and 'web_exposed' not in merged:
+                            merged['web_exposed'] = bool(settings.get('expose_web'))
+                    if app_module.protocol_base(proto) == 'nginx':
+                        for key in ('domain', 'email', 'site_url'):
+                            if settings.get(key) is not None:
+                                merged[key] = settings[key]
+                else:
+                    merged['base_protocol'] = app_module.protocol_base(proto)
+                    merged['instance'] = app_module.protocol_instance(proto)
+                    merged['display_name'] = app_module.protocol_display_name(proto)
+                    merged['container_name'] = app_module.protocol_container_name(proto)
+                return merged
+
+            def should_preserve_saved_protocol(proto, result=None, err=None):
+                if proto not in db_protocols:
+                    return False
+                if app_module.protocol_base(proto) in app_module.MULTI_INSTANCE_PROTOCOLS and app_module.protocol_instance(proto) > 1:
+                    return True
+                if err or (result and result.get('error')):
+                    return True
+                return False
+
+            def check_proto(proto):
+                try:
+                    p_manager = app_module.get_protocol_manager(ssh, proto)
+                    result = app_module._manager_call(p_manager, 'get_server_status', proto)
+                    return proto, merge_saved_protocol_status(proto, result), None
+                except Exception as e:
+                    return proto, merge_saved_protocol_status(proto, {}, str(e)), str(e)
+
+            protocols_to_check = list(dict.fromkeys(app_module.BASE_PROTOCOLS + list(db_protocols.keys())))
+            for proto in protocols_to_check:
+                proto, result, err = await asyncio.to_thread(check_proto, proto)
+                status['protocols'][proto] = result
+                if err:
+                    continue
+                if result.get('container_exists'):
+                    if proto not in db_protocols:
+                        new_proto = models.ServerProtocol(
+                            server_id=server.id,
+                            protocol_type=proto,
+                            port=int(result.get('port', 55424)) if result.get('port') else 55424,
+                            base_protocol=app_module.protocol_base(proto),
+                            instance=app_module.protocol_instance(proto),
+                            display_name=app_module.protocol_display_name(proto),
+                            container_name=app_module.protocol_container_name(proto)
+                        )
+                        settings = {}
+                        if app_module.protocol_base(proto) == 'adguard':
+                            settings.update({
+                                'mode': result.get('mode'),
+                                'internal_ip': result.get('internal_ip'),
+                                'web_port': result.get('web_port'),
+                                'expose_web': result.get('web_exposed'),
+                            })
+                        if app_module.protocol_base(proto) == 'nginx':
+                            settings.update({
+                                'domain': result.get('domain'),
+                                'email': result.get('email'),
+                                'site_url': result.get('site_url'),
+                            })
+                        new_proto.extra_params = {
+                            "awg_params": result.get('awg_params', {}),
+                            "settings": settings
+                        }
+                        db.add(new_proto)
+                        db_protocols[proto] = new_proto
+                        changed = True
+                else:
+                    if proto in db_protocols:
+                        if should_preserve_saved_protocol(proto, result, err):
+                            status['protocols'][proto]['container_exists'] = True
+                            status['protocols'][proto].setdefault('container_running', False)
+                            status['protocols'][proto]['status_preserved'] = True
+                        else:
+                            await db.delete(db_protocols[proto])
+                            del db_protocols[proto]
+                            changed = True
+                    
+            if changed:
+                await db.commit()
+                
+            return status
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
     except Exception as e:
         app_module.logger.exception("Error checking server")
         return JSONResponse({'error': str(e), 'connection': 'failed'}, status_code=500)

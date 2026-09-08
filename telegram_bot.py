@@ -412,50 +412,16 @@ def _client_keyboard(server_id: int, proto: str, client: dict) -> dict:
 
 
 def _get_ssh_and_manager(server: dict, proto: str):
-    sys.path.insert(0, os.path.dirname(__file__))
-    from managers.ssh_manager import SSHManager
-    from managers.awg_manager import AWGManager
-    from managers.xray_manager import XrayManager
-    from managers.telemt_manager import TelemtManager
-    from managers.wireguard_manager import WireGuardManager
-    from managers.dns_manager import DNSManager
-    from managers.socks5_manager import Socks5Manager
-    from managers.adguard_manager import AdguardManager
-    from managers.nginx_manager import NginxManager
-
-    ssh = SSHManager(
-        server["host"],
-        server.get("ssh_port", 22),
-        server["username"],
-        server.get("password", ""),
-        server.get("private_key", ""),
-    )
-    base = _proto_base(proto)
-    if base == "xray":
-        manager = XrayManager(ssh, proto)
-    elif base == "telemt":
-        manager = TelemtManager(ssh, proto)
-    elif base == "wireguard":
-        manager = WireGuardManager(ssh)
-    elif base == "dns":
-        manager = DNSManager(ssh)
-    elif base == "socks5":
-        manager = Socks5Manager(ssh, proto)
-    elif base == "adguard":
-        manager = AdguardManager(ssh)
-    elif base == "nginx":
-        manager = NginxManager(ssh, proto)
-    else:
-        manager = AWGManager(ssh)
+    import app as app_module
+    ssh = app_module.get_ssh(server)
+    manager = app_module.get_protocol_manager(ssh, proto)
     return ssh, manager
 
 
 def _manager_call(manager, method_name: str, proto: str, *args, **kwargs):
-    method = getattr(manager, method_name)
-    try:
-        return method(proto, *args, **kwargs)
-    except TypeError:
-        return method(*args, **kwargs)
+    import app as app_module
+    return app_module._manager_call(manager, method_name, proto, *args, **kwargs)
+
 
 
 def _refresh_server_protocol_statuses(server: dict) -> dict:
@@ -634,7 +600,7 @@ async def _handle_get_config(api: TelegramAPI, chat_id: int, message_id: int, ca
         await api.send_message(chat_id, "❌ Connection not found.")
         return
 
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     sid = conn.get("server_id")
     if sid not in servers:
         await api.send_message(chat_id, "❌ Server not found.")
@@ -719,7 +685,7 @@ async def _handle_send_qr(api: TelegramAPI, chat_id: int, callback_id: str, conn
         await api.send_message(chat_id, "❌ Connection not found.")
         return
 
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     sid = conn.get("server_id")
     if sid not in servers:
         await api.send_message(chat_id, "❌ Server not found.")
@@ -788,7 +754,7 @@ async def _handle_download_conf(api: TelegramAPI, chat_id: int, callback_id: str
         await api.send_message(chat_id, "❌ Connection not found.")
         return
 
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     sid = conn.get("server_id")
     if sid not in servers:
         await api.send_message(chat_id, "❌ Server not found.")
@@ -889,7 +855,7 @@ async def _handle_add_server_command(api: TelegramAPI, msg: dict, db):
 
 async def _admin_servers(api: TelegramAPI, chat_id: int, message_id: Optional[int], db):
     data = await _build_data_dict(db)
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     text = f"🖥 <b>Servers</b> ({len(servers)})\n\nChoose a server:"
     if message_id:
         await api.edit_message(chat_id, message_id, text, reply_markup=_server_keyboard(data))
@@ -1018,7 +984,7 @@ async def _admin_user_detail(api: TelegramAPI, chat_id: int, message_id: int, us
         {"text": "🗑 Delete", "callback_data": _ref("confirm_del_user", {"uid": user_id})},
     ])
 
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     for c in conns[:20]:
         sid = c.get("server_id")
         server_name = "Unknown"
@@ -1033,7 +999,7 @@ async def _admin_user_detail(api: TelegramAPI, chat_id: int, message_id: int, us
 
 async def _admin_server_detail(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, db):
     data = await _build_data_dict(db)
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     if server_id not in servers:
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return
@@ -1050,7 +1016,7 @@ async def _admin_server_detail(api: TelegramAPI, chat_id: int, message_id: int, 
 
 async def _admin_protocol_detail(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, proto: str, db):
     data = await _build_data_dict(db)
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     if server_id not in servers:
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return
@@ -1104,7 +1070,7 @@ async def _admin_toggle_protocol(api: TelegramAPI, chat_id: int, message_id: int
 
 async def _admin_install_protocol_list(api: TelegramAPI, chat_id: int, message_id: int, server_id: int, db):
     data = await _build_data_dict(db)
-    servers = data.get("servers", [])
+    servers = data.get("servers", {})
     if server_id >= len(servers):
         await api.edit_message(chat_id, message_id, "❌ Server not found.")
         return

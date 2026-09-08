@@ -1,5 +1,7 @@
+import asyncio
 import uuid
 from datetime import datetime
+
 from typing import Optional
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
@@ -88,10 +90,15 @@ async def api_get_connections(request: Request, server_id: int, protocol: str = 
             return {'clients': clients}
 
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, protocol)
-        clients = app_module._manager_call(manager, 'get_clients', protocol)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, protocol)
+            clients = await asyncio.to_thread(app_module._manager_call, manager, 'get_clients', protocol)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
 
         existing_cids = {uc.client_id for uc in user_conns}
         live_cids = {client.get('clientId') for client in clients if client.get('clientId')}
@@ -155,24 +162,32 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
         port = proto_info.port if proto_info else '55424'
 
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, req.protocol)
-        
-        if app_module.protocol_base(req.protocol) == 'telemt':
-            result = manager.add_client(
-                req.protocol, req.name, server.host, port,
-                telemt_quota=req.telemt_quota,
-                telemt_max_ips=req.telemt_max_ips,
-                telemt_expiry=req.telemt_expiry,
-                secret=req.telemt_secret,
-                user_ad_tag=req.telemt_ad_tag,
-                max_tcp_conns=req.telemt_max_conns
-            )
-        elif app_module.protocol_base(req.protocol) == 'wireguard':
-            result = manager.add_client(req.name, server.host)
-        else:
-            result = manager.add_client(req.protocol, req.name, server.host, port)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, req.protocol)
+            
+            def _add_client():
+                if app_module.protocol_base(req.protocol) == 'telemt':
+                    return manager.add_client(
+                        req.protocol, req.name, server.host, port,
+                        telemt_quota=req.telemt_quota,
+                        telemt_max_ips=req.telemt_max_ips,
+                        telemt_expiry=req.telemt_expiry,
+                        secret=req.telemt_secret,
+                        user_ad_tag=req.telemt_ad_tag,
+                        max_tcp_conns=req.telemt_max_conns
+                    )
+                elif app_module.protocol_base(req.protocol) == 'wireguard':
+                    return manager.add_client(req.name, server.host)
+                else:
+                    return manager.add_client(req.protocol, req.name, server.host, port)
+
+            result = await asyncio.to_thread(_add_client)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
 
         if result.get('config'):
             result['vpn_link'] = app_module.generate_vpn_link(result['config'])
@@ -213,10 +228,15 @@ async def api_remove_connection(request: Request, server_id: int, req: Connectio
         if not req.client_id:
             return JSONResponse({'error': 'Client ID is required'}, status_code=400)
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, req.protocol)
-        app_module._manager_call(manager, 'remove_client', req.protocol, req.client_id)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, req.protocol)
+            await asyncio.to_thread(app_module._manager_call, manager, 'remove_client', req.protocol, req.client_id)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
         
         stmt = select(models.Connection).where(
             models.Connection.client_id == req.client_id,
@@ -249,21 +269,26 @@ async def api_edit_connection(request: Request, server_id: int, req: EditConnect
             return JSONResponse({'error': 'Server not found'}, status_code=404)
         
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, req.protocol)
-        
-        edit_params = {}
-        if app_module.protocol_base(req.protocol) == 'telemt':
-            edit_params['telemt_quota'] = req.telemt_quota
-            edit_params['telemt_max_ips'] = req.telemt_max_ips
-            edit_params['telemt_expiry'] = req.telemt_expiry
-            edit_params['secret'] = req.telemt_secret
-            edit_params['user_ad_tag'] = req.telemt_ad_tag
-            edit_params['max_tcp_conns'] = req.telemt_max_conns
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, req.protocol)
             
-        result = manager.edit_client(req.protocol, req.client_id, edit_params)
-        ssh.disconnect()
-        return result
+            edit_params = {}
+            if app_module.protocol_base(req.protocol) == 'telemt':
+                edit_params['telemt_quota'] = req.telemt_quota
+                edit_params['telemt_max_ips'] = req.telemt_max_ips
+                edit_params['telemt_expiry'] = req.telemt_expiry
+                edit_params['secret'] = req.telemt_secret
+                edit_params['user_ad_tag'] = req.telemt_ad_tag
+                edit_params['max_tcp_conns'] = req.telemt_max_conns
+                
+            result = await asyncio.to_thread(manager.edit_client, req.protocol, req.client_id, edit_params)
+            return result
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
     except Exception as e:
         app_module.logger.exception("Error editing connection")
         return JSONResponse({'error': str(e)}, status_code=500)
@@ -300,10 +325,15 @@ async def api_get_connection_config(request: Request, server_id: int, req: Conne
         port = proto_info.port if proto_info else '55424'
         
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, req.protocol)
-        config = app_module._manager_call(manager, 'get_client_config', req.protocol, req.client_id, server.host, port)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, req.protocol)
+            config = await asyncio.to_thread(app_module._manager_call, manager, 'get_client_config', req.protocol, req.client_id, server.host, port)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
         vpn_link = app_module.generate_vpn_link(config) if config else ''
         qr_content = app_module.generate_qr_content(config) if config else ''
         if app_module.posthog_client:
@@ -329,10 +359,15 @@ async def api_toggle_connection(request: Request, server_id: int, req: ToggleCon
         if not req.client_id:
             return JSONResponse({'error': 'Client ID is required'}, status_code=400)
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, req.protocol)
-        app_module._manager_call(manager, 'toggle_client', req.protocol, req.client_id, req.enable)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, req.protocol)
+            await asyncio.to_thread(app_module._manager_call, manager, 'toggle_client', req.protocol, req.client_id, req.enable)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
         status = 'enabled' if req.enable else 'disabled'
         app_module.capture_posthog_event(
             request,
@@ -347,3 +382,4 @@ async def api_toggle_connection(request: Request, server_id: int, req: ToggleCon
     except Exception as e:
         app_module.logger.exception("Error toggling connection")
         return JSONResponse({'error': str(e)}, status_code=500)
+

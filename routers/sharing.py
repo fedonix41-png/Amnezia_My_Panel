@@ -163,10 +163,15 @@ async def api_share_config(token: str, connection_id: str, request: Request, db:
         port = proto_info.port if proto_info else '55424'
         
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, conn.protocol)
-        config_text = app_module._manager_call(manager, 'get_client_config', conn.protocol, conn.client_id, server.host, port)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, conn.protocol)
+            config_text = await asyncio.to_thread(app_module._manager_call, manager, 'get_client_config', conn.protocol, conn.client_id, server.host, port)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
         vpn_link = app_module.generate_vpn_link(config_text) if config_text else ''
         qr_content = app_module.generate_qr_content(config_text) if config_text else ''
         return {'config': config_text, 'vpn_link': vpn_link, 'qr_content': qr_content}
@@ -205,10 +210,15 @@ async def api_my_connection_config(request: Request, connection_id: str, db: Asy
         port = proto_info.port if proto_info else '55424'
         
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, conn.protocol)
-        config_text = app_module._manager_call(manager, 'get_client_config', conn.protocol, conn.client_id, server.host, port)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, conn.protocol)
+            config_text = await asyncio.to_thread(app_module._manager_call, manager, 'get_client_config', conn.protocol, conn.client_id, server.host, port)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
         vpn_link = app_module.generate_vpn_link(config_text) if config_text else ''
         qr_content = app_module.generate_qr_content(config_text) if config_text else ''
         return {'config': config_text, 'vpn_link': vpn_link, 'qr_content': qr_content}

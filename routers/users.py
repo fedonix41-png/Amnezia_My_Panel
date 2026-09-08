@@ -170,21 +170,30 @@ async def api_add_user(request: Request, req: AddUserRequest, db: AsyncSession =
                 
                 conn_name = req.connection_name or f"{req.username}_vpn"
                 ssh = app_module.get_ssh(server, db)
-                ssh.connect()
-                manager = app_module.get_protocol_manager(ssh, req.protocol)
-                if app_module.protocol_base(req.protocol) == 'telemt':
-                    conn_result = manager.add_client(
-                        req.protocol, conn_name, server.host, port,
-                        telemt_quota=req.telemt_quota,
-                        telemt_max_ips=req.telemt_max_ips,
-                        telemt_expiry=req.telemt_expiry,
-                        secret=req.telemt_secret,
-                        user_ad_tag=req.telemt_ad_tag,
-                        max_tcp_conns=req.telemt_max_conns
-                    )
-                else:
-                    conn_result = manager.add_client(req.protocol, conn_name, server.host, port)
-                ssh.disconnect()
+                try:
+                    await asyncio.to_thread(ssh.connect)
+                    manager = app_module.get_protocol_manager(ssh, req.protocol)
+                    def _add_user_client():
+                        if app_module.protocol_base(req.protocol) == 'telemt':
+                            return manager.add_client(
+                                req.protocol, conn_name, server.host, port,
+                                telemt_quota=req.telemt_quota,
+                                telemt_max_ips=req.telemt_max_ips,
+                                telemt_expiry=req.telemt_expiry,
+                                secret=req.telemt_secret,
+                                user_ad_tag=req.telemt_ad_tag,
+                                max_tcp_conns=req.telemt_max_conns
+                            )
+                        else:
+                            return manager.add_client(req.protocol, conn_name, server.host, port)
+
+                    conn_result = await asyncio.to_thread(_add_user_client)
+                finally:
+                    try:
+                        await asyncio.to_thread(ssh.disconnect)
+                    except Exception:
+                        pass
+
 
                 if conn_result.get('client_id'):
                     conn = models.Connection(

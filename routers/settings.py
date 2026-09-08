@@ -295,10 +295,16 @@ async def api_get_server_clients(request: Request, server_id: int, protocol: str
             return JSONResponse({'error': 'Server not found'}, status_code=404)
             
         ssh = app_module.get_ssh(server, db)
-        ssh.connect()
-        manager = app_module.get_protocol_manager(ssh, protocol)
-        clients = manager.get_clients(protocol)
-        ssh.disconnect()
+        try:
+            await asyncio.to_thread(ssh.connect)
+            manager = app_module.get_protocol_manager(ssh, protocol)
+            clients = await asyncio.to_thread(app_module._manager_call, manager, 'get_clients', protocol)
+        finally:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
         
         stmt = select(models.Connection.client_id).where(
             models.Connection.server_id == server_id,
