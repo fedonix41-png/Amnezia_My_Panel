@@ -18,10 +18,10 @@ Self-hosted панель управления VPN-серверами. Один D
 ## Структура проекта
 
 ```
-app.py              — точка входа, FastAPI app, роутинг протоколов, туннели, утилиты (~2150 строк)
-telegram_bot.py     — Telegram-бот (~1680 строк)
+app.py              — точка входа, FastAPI app, роутинг протоколов, туннели, утилиты (~2250 строк)
+telegram_bot.py     — Telegram-бот (~1720 строк)
 config.py           — все настройки из env/.env, валидация ключей при старте
-middleware.py        — CSRF, SecurityHeaders, SlowAPI
+middleware.py        — PostHog, CSRF, SecurityHeaders (SlowAPI — внешняя либа slowapi)
 managers/           — protocol managers (duck-typing, без базового класса)
   ssh_manager.py    — paramiko-обёртка, ЕДИНСТВЕННЫЙ модуль, открывающий SSH-сокеты
   secrets.py        — Fernet-шифрование секретов серверов (формат v1:<token>)
@@ -38,7 +38,7 @@ database/
 templates/          — Jinja2 HTML-шаблоны
 static/             — CSS, JS
 tests/              — pytest + FastAPI TestClient, in-memory SQLite
-docs/ARCHITECTURE.md — глубокий SSOT: middleware, протоколы, SSH, безопасность
+docs/terrain/INDEX.md — **Карта местности**: SSOT для middleware, протоколов, SSH, безопасности. Начинай навигацию отсюда
 ```
 
 ## Ключевые паттерны
@@ -94,14 +94,7 @@ finally:
 
 ### Реестр протоколов
 
-```python
-# app.py — добавляй новые протоколы сюда:
-BASE_PROTOCOLS = ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'dns',
-                  'wireguard', 'socks5', 'adguard', 'nginx']
-MULTI_INSTANCE_PROTOCOLS = {'awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'socks5'}
-```
-
-`MULTI_INSTANCE_PROTOCOLS` — протоколы, которые могут иметь несколько инстансов на одном сервере (каждый со своим `protocol_type` вроде `awg`, `awg_2`, `xray_custom`).
+Новые протоколы регистрируются в `BASE_PROTOCOLS` и `MULTI_INSTANCE_PROTOCOLS` (`app.py:954-955`). Полный список, семантика multi-instance и точки интеграции — в [02-core.md](docs/terrain/02-core.md).
 
 ## Безопасность (критично)
 
@@ -128,20 +121,19 @@ echo 'password' | sudo -S command
 
 ### Middleware (порядок важен)
 
-Внешний → внутренний: `TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session`
+Внешний → внутренний: `TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session → PostHog`
 
 - CSRF: double-submit cookie, Bearer-запросы exempt
 - `TrustedHost`: только в production (пропускается при `AWP_DEV=1`)
 
 ## Чего НЕ делать
 
-- **Не добавляй глобальное состояние** (глобальные dict/list для хранения данных) — всё состояние в БД
+- **Не добавляй глобальное состояние** (глобальные dict/list для хранения данных) — всё состояние в БД. Исключение: существующие процессные глобалы (`TUNNEL_RUNTIMES`, `_callback_refs`, `_pending_inputs`) — см. [05-gotchas](docs/terrain/05-gotchas.md).
 - **Не используй синхронный DB-доступ** вне `run_in_executor` — проект полностью async
 - **Не создавай файлы в корне проекта** — роутеры в `routers/`, менеджеры в `managers/`
 - **Не ломай `import app as app_module`** — это осознанный обход циклических импортов
 - **Не добавляй `try/except` без логирования** — ошибки не должны теряться молча
-- **Не используй `data.json`** — это legacy, всё хранится в БД через SQLAlchemy
-- **Не добавляй `echo '<pass>' | sudo -S`** в shell-скрипты — используй paramiko stdin
+- **Не храни данные в `data.json`** — всё в БД через SQLAlchemy (`data.json` используется только как цель бэкапов)
 
 ## Тесты
 
@@ -175,13 +167,13 @@ class TestSomething:
 
 ## Legacy и миграции
 
-- `data.json` — **не используется**, данные перенесены в БД. Функции `load_data`/`save_data` удалены
-- `_maybe_migrate_legacy_data_file()` — one-time перенос при первом запуске после миграции
-- `_resolve_api_token()` — работает со словарём в памяти (legacy), новые токены пишутся в таблицу `ApiToken`
+- `data.json` — **не источник данных**, всё хранится в БД. Но `DATA_FILE` (env-оверрайд, по умолч. `data.json`) по-прежнему используется как **цель бэкапов** в `_background_backup()`. Не удаляй `_background_backup` и не меняй `DATA_FILE` без понимания этого.
+- `_maybe_migrate_legacy_data_file()` (`app.py:197`) — one-time перенос legacy-пути `data.json` при первом запуске после миграции.
+- `_resolve_api_token()` (`app.py:1137`) — **мёртвый код** (работает со словарём в памяти). Реальная bearer-аутентификация читает таблицу `ApiToken` из БД напрямую (`get_current_user`, `app.py:1493-1502`).
 
 ## Навигация по большим файлам
 
-`app.py` (~2150 строк) и `telegram_bot.py` (~1680 строк) — используй grep по сигнатурам:
+`app.py` (~2250 строк) и `telegram_bot.py` (~1720 строк) — используй grep по сигнатурам:
 ```bash
 grep -n "def \|async def \|class " app.py
 grep -n "BASE_PROTOCOLS\|_check_admin\|_manager_call\|get_protocol_manager" app.py
@@ -190,5 +182,12 @@ grep -n "BASE_PROTOCOLS\|_check_admin\|_manager_call\|get_protocol_manager" app.
 ## Документация
 
 - Этот файл (`AGENTS.md`) — быстрый старт
-- `docs/ARCHITECTURE.md` — глубокий SSOT: middleware, протоколы, SSH-слой, безопасность, паттерн расширения протокола (7-шаговый чек-лист в §13)
+- `docs/terrain/INDEX.md` — **Карта местности**: навигация по кодовой базе, cross-refs к тематическим файлам. Начинай отсюда
+  - `01-entry-points.md` — эндпоинты, middleware, auth
+  - `02-core.md` — протоколы, фабрика менеджеров, крипто
+  - `03-infrastructure.md` — БД, SSH, Docker, туннели
+  - `04-critical-paths.md` — data flows, граф зависимостей
+  - `05-gotchas.md` — подводные камни, глоссарий, priority reading
+  - `06-vpn-formats.md` — vpn://, QR binary, AWG obfuscation, native JSON
+  - `07-deployment.md` — Docker hardening, SSL, WARP, protocol extension, smoke test
 - Если изменение меняет поведение, сигнатуры или структуру — обнови соответствующий документ
