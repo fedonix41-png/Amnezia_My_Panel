@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 
 {% block title_extra %} — {{ _('nav_settings') }}{% endblock %}
 
 {% block content %}
 <div class="section-title">
-    <span class="icon">⚙️</span>
+    <span class="icon">{{ icon('settings') }}</span>
     {{ _('settings_title') }}
 </div>
 
@@ -81,7 +82,7 @@
             <div style="display: flex; flex-direction: column; gap: var(--space-md);">
                 <a href="/docs" target="_blank" class="btn btn-secondary"
                     style="justify-content: flex-start; text-decoration: none;">
-                    <span style="font-size: 1.2rem; margin-right: 10px;">📖</span>
+                    <span style="font-size: 1.2rem; margin-right: 10px;">{{ icon('book') }}</span>
                     <div style="text-align: left;">
                         <div style="font-weight: 600;">Swagger UI</div>
                         <div style="font-size: 0.75rem; opacity: 0.7;">{{ _('api_docs_hint') }}</div>
@@ -89,7 +90,7 @@
                 </a>
                 <a href="/redoc" target="_blank" class="btn btn-secondary"
                     style="justify-content: flex-start; text-decoration: none;">
-                    <span style="font-size: 1.2rem; margin-right: 10px;">📑</span>
+                    <span style="font-size: 1.2rem; margin-right: 10px;">{{ icon('file-text') }}</span>
                     <div style="text-align: left;">
                         <div style="font-weight: 600;">ReDoc</div>
                         <div style="font-size: 0.75rem; opacity: 0.7;">{{ _('api_docs_hint') }}</div>
@@ -101,7 +102,7 @@
 
         <!-- BLOCK Tunnels -->
         <div class="card">
-            <h3 class="card-title" style="margin-bottom: var(--space-lg);">🌍 {{ _('tunnels_title') }}</h3>
+            <h3 class="card-title" style="margin-bottom: var(--space-lg);">{{ icon('globe') }} {{ _('tunnels_title') }}</h3>
             <div style="display: flex; flex-direction: column; gap: var(--space-md);">
                 <div style="padding: var(--space-md); border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary);">
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-md); margin-bottom: var(--space-sm);">
@@ -186,7 +187,7 @@
 
         <!-- BLOCK SSL/HTTPS -->
         <div class="card">
-            <h3 class="card-title" style="margin-bottom: var(--space-lg);">🔒 {{ _('ssl_title') }}</h3>
+            <h3 class="card-title" style="margin-bottom: var(--space-lg);">{{ icon('lock') }} {{ _('ssl_title') }}</h3>
             <form id="sslForm">
                 <div class="form-group">
                     <label class="form-label">
@@ -291,12 +292,12 @@
                         <div style="display: flex; gap: var(--space-sm); margin-left: var(--space-lg);">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="syncRemnawaveNow()"
                                 id="syncNowBtn">
-                                <span id="syncNowBtnText">🔄 {{ _('sync_now_btn') }}</span>
+                                <span id="syncNowBtnText">{{ icon('refresh') }} {{ _('sync_now_btn') }}</span>
                                 <div class="spinner hidden" id="syncNowSpinner" style="width:14px; height:14px;"></div>
                             </button>
                             <button type="button" class="btn btn-danger btn-sm" onclick="deleteSyncRemnawave()"
                                 id="syncDelBtn">
-                                <span id="syncDelBtnText">🗑 {{ _('delete_sync_btn') }}</span>
+                                <span id="syncDelBtnText">{{ icon('trash') }} {{ _('delete_sync_btn') }}</span>
                                 <div class="spinner hidden" id="syncDelSpinner" style="width:14px; height:14px;"></div>
                             </button>
                         </div>
@@ -341,12 +342,12 @@
 
         <!-- BLOCK: Simple Backup -->
         <div class="card" style="margin-top: var(--space-lg);">
-            <h3 class="card-title" style="margin-bottom: var(--space-lg);">📤 {{ _('backup_title') }}</h3>
+            <h3 class="card-title" style="margin-bottom: var(--space-lg);">{{ icon('save') }} {{ _('backup_title') }}</h3>
             <div style="display: flex; flex-direction: column; gap: var(--space-md);">
                 <div style="display: flex; gap: var(--space-sm);">
                     <a href="/api/settings/backup/download" class="btn btn-secondary"
                         style="flex:1; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:var(--space-sm);">
-                        <span>⬇️</span> {{ _('download_backup') }}
+                        {{ icon('download') }} {{ _('download_backup') }}
                     </a>
                 </div>
                 <div style="border-top: 1px solid var(--border-color); padding-top: var(--space-md);">
@@ -356,7 +357,7 @@
                         <button type="button" class="btn btn-secondary"
                             onclick="document.getElementById('backupFile').click()" id="restoreBtn"
                             style="gap:var(--space-sm);">
-                            <span>⬆️</span> {{ _('restore_backup') }}
+                            {{ icon('upload') }} {{ _('restore_backup') }}
                         </button>
                     </div>
                 </div>
@@ -369,9 +370,9 @@
         <!-- BLOCK: API Tokens -->
         <div class="card" style="margin-top: var(--space-lg);">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-md);">
-                <h3 class="card-title" style="margin:0;">🔑 {{ _('api_tokens_title') }}</h3>
+                <h3 class="card-title" style="margin:0;">{{ icon('key') }} {{ _('api_tokens_title') }}</h3>
                 <button type="button" class="btn btn-primary btn-sm" onclick="openCreateTokenModal()">
-                    <span>＋</span> {{ _('api_tokens_create') }}
+                    {{ icon('plus') }} {{ _('api_tokens_create') }}
                 </button>
             </div>
             <p class="form-hint" style="margin-bottom: var(--space-md);">
@@ -384,7 +385,7 @@
 
         <!-- BLOCK: About & Updates -->
         <div class="card" style="margin-top: var(--space-lg);">
-            <h3 class="card-title" style="margin-bottom: var(--space-lg);">ℹ️ {{ _('about_title') }}</h3>
+            <h3 class="card-title" style="margin-bottom: var(--space-lg);">{{ icon('info') }} {{ _('about_title') }}</h3>
             <div style="display: flex; flex-direction: column; gap: var(--space-md);">
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
                     <span style="font-weight: 500;">{{ _('current_version') }}</span>
@@ -397,11 +398,11 @@
 
                 <div style="display: flex; gap: var(--space-sm); margin-top: var(--space-sm);">
                     <button type="button" class="btn btn-secondary" onclick="checkForUpdates()" id="checkUpdateBtn" style="flex:1;">
-                        <span id="checkUpdateBtnText">🔄 {{ _('check_updates') }}</span>
+                        <span id="checkUpdateBtnText">{{ icon('refresh') }} {{ _('check_updates') }}</span>
                         <div class="spinner hidden" id="checkUpdateSpinner" style="width:14px; height:14px;"></div>
                     </button>
                     <a href="https://github.com/PRVTPRO/Amnezia-Web-Panel/releases" target="_blank" class="btn btn-primary hidden" id="downloadUpdateBtn" style="flex:1; text-decoration: none; justify-content: center;">
-                        ⬇️ {{ _('download_update') }}
+                        {{ icon('download') }} {{ _('download_update') }}
                     </a>
                 </div>
             </div>
@@ -421,7 +422,7 @@
     <div class="modal" style="max-width: 460px;">
         <div class="modal-header">
             <h2 class="modal-title">{{ _('api_tokens_create_title') }}</h2>
-            <button class="modal-close" onclick="closeModal('createTokenModal')">×</button>
+            <button class="modal-close" onclick="closeModal('createTokenModal')">{{ icon('x') }}</button>
         </div>
         <div class="form-group">
             <label class="form-label">{{ _('api_tokens_name_label') }}</label>
@@ -444,7 +445,7 @@
     <div class="modal" style="max-width: 560px;">
         <div class="modal-header">
             <h2 class="modal-title">{{ _('api_tokens_created_title') }}</h2>
-            <button class="modal-close" onclick="closeModal('newTokenModal')">×</button>
+            <button class="modal-close" onclick="closeModal('newTokenModal')">{{ icon('x') }}</button>
         </div>
         <div class="form-group">
             <label class="form-label">{{ _('api_tokens_name_label') }}</label>
@@ -456,14 +457,14 @@
                 style="font-family: 'SF Mono', monospace; font-size: 0.85rem;">
         </div>
         <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: var(--space-md); margin-bottom: var(--space-md);">
-            ⚠️ <strong>{{ _('api_tokens_warning_title') }}</strong>
+            {{ icon('alert') }} <strong>{{ _('api_tokens_warning_title') }}</strong>
             <div class="form-hint" style="margin-top: 4px;">{{ _('api_tokens_warning_body') }}</div>
         </div>
         <div class="form-hint" style="margin-bottom: var(--space-sm); font-family: 'SF Mono', monospace; font-size: 0.78rem; padding: var(--space-sm); background: var(--bg-primary); border-radius: var(--radius-sm);">
             curl -H "Authorization: Bearer &lt;your_token&gt;" {{ request.url.scheme }}://{{ request.url.netloc }}/api/users
         </div>
         <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="copyNewToken()">📋 {{ _('copy') }}</button>
+            <button class="btn btn-secondary" onclick="copyNewToken()">{{ icon('copy') }} {{ _('copy') }}</button>
             <button class="btn btn-primary" onclick="closeModal('newTokenModal')">{{ _('done') }}</button>
         </div>
     </div>
@@ -730,7 +731,7 @@
             showToast(`${_('error')}: ` + err.message, 'error');
         } finally {
             btn.disabled = false;
-            text.textContent = `🔄 ${_('sync_now_btn')}`;
+            text.textContent = `⟳ ${_('sync_now_btn')}`;
             spinner.classList.add('hidden');
         }
     }
@@ -757,7 +758,7 @@
             showToast(`${_('error')}: ` + err.message, 'error');
         } finally {
             btn.disabled = false;
-            text.textContent = `🗑 ${_('delete_sync_btn')}`;
+            text.textContent = `✕ ${_('delete_sync_btn')}`;
             spinner.classList.add('hidden');
         }
     }
@@ -926,7 +927,7 @@
             showToast('Failed to check for updates: ' + err.message, 'error');
         } finally {
             btn.disabled = false;
-            text.textContent = "🔄 {{ _('check_updates')|default('Check for updates') }}";
+            text.textContent = "⟳ {{ _('check_updates')|default('Check for updates') }}";
             spinner.classList.add('hidden');
         }
     }

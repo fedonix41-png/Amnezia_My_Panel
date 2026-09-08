@@ -7,33 +7,25 @@
     <meta name="description" content="{{ _('site_description') }}">
     <title>{{ site_settings.title or 'Amnezia Panel' }} {% block title_extra %}{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preload" href="/static/fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/style.css?v=obsidian-8">
     <script>!function () { var t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', t) }()</script>
     <script src="/static/js/qrcode.min.js"></script>
     {% block head_extra %}{% endblock %}
-    <style>
-        .lang-check {
-            color: var(--success);
-            font-weight: 700;
-        }
-
-        [dir="rtl"] .lang-check {
-            margin-right: auto;
-        }
-
-        [dir="ltr"] .lang-check {
-            margin-left: auto;
-        }
-    </style>
 </head>
 
 <body>
+    {% from "_icons.html" import icon, sprite %}
+    {{ sprite() }}
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="app-container">
         <header class="app-header">
             <a href="/" class="app-logo" style="text-decoration:none">
-                <div class="logo-icon">{{ site_settings.logo }}</div>
+                <div class="logo-icon">
+                    {%- if site_settings.logo %}{{ site_settings.logo }}{% else %}{{ icon('shield') }}{% endif -%}
+                </div>
                 <div>
                     <div class="logo-text">{{ site_settings.title }}</div>
                     <div class="logo-subtitle">{{ site_settings.subtitle }}</div>
@@ -43,40 +35,37 @@
             {% if current_user %}
             <nav class="header-nav">
                 {% if current_user.role in ['admin', 'support'] %}
-                <a href="/" class="nav-link">{{ _('nav_servers') }}</a>
-                <a href="/users" class="nav-link">{{ _('nav_users') }}</a>
+                <a href="/" class="nav-link">{{ icon('server') }} {{ _('nav_servers') }}</a>
+                <a href="/users" class="nav-link">{{ icon('users') }} {{ _('nav_users') }}</a>
                 {% endif %}
                 {% if current_user.role == 'admin' %}
-                <a href="/settings" class="nav-link">{{ _('nav_settings') }}</a>
+                <a href="/settings" class="nav-link">{{ icon('settings') }} {{ _('nav_settings') }}</a>
                 {% endif %}
-                <a href="/my" class="nav-link">{{ _('nav_connections') }}</a>
+                <a href="/my" class="nav-link">{{ icon('key') }} {{ _('nav_connections') }}</a>
             </nav>
 
             <div class="nav-user">
-                <button class="theme-toggle" onclick="openModal('langModal')" title="{{ _('select_lang') }}"
-                    style="margin-right: var(--space-sm);">
-                    {% if lang == 'ru' %}🇷🇺{% elif lang == 'fr' %}🇫🇷{% elif lang == 'zh' %}🇨🇳{% elif lang == 'fa'
-                    %}🇮🇷{% else %}🇺🇸{% endif %}
+                <button class="theme-toggle" onclick="openModal('langModal')" title="{{ _('select_lang') }}">
+                    <span class="font-mono" style="font-size:0.62rem; font-weight:600;">{{ lang | upper }}</span>
                 </button>
-                <button class="theme-toggle" onclick="toggleTheme()" title="{{ _('toggle_theme') }}"
-                    id="themeToggle">🌙</button>
+                <button class="theme-toggle" onclick="toggleTheme()" title="{{ _('toggle_theme') }}" id="themeToggle">
+                    {{ icon('moon', 'ic-moon') }}{{ icon('sun', 'ic-sun') }}
+                </button>
                 <span class="nav-username">{{ current_user.username }}</span>
                 <span
-                    class="badge badge-{{ 'success' if current_user.role == 'admin' else ('info' if current_user.role == 'support' else 'warn') }}"
-                    style="font-size:0.65rem;">
+                    class="badge badge-{{ 'success' if current_user.role == 'admin' else ('info' if current_user.role == 'support' else 'warn') }}">
                     {{ current_user.role | upper }}
                 </span>
                 <a href="/logout" class="btn btn-secondary btn-sm">{{ _('nav_logout') }}</a>
             </div>
             {% else %}
             <div class="nav-user">
-                <button class="theme-toggle" onclick="openModal('langModal')" title="{{ _('select_lang') }}"
-                    style="margin-right: var(--space-sm);">
-                    {% if lang == 'ru' %}🇷🇺{% elif lang == 'fr' %}🇫🇷{% elif lang == 'zh' %}🇨🇳{% elif lang == 'fa'
-                    %}🇮🇷{% else %}🇺🇸{% endif %}
+                <button class="theme-toggle" onclick="openModal('langModal')" title="{{ _('select_lang') }}">
+                    <span class="font-mono" style="font-size:0.62rem; font-weight:600;">{{ lang | upper }}</span>
                 </button>
-                <button class="theme-toggle" onclick="toggleTheme()" title="{{ _('toggle_theme') }}"
-                    id="themeToggle">🌙</button>
+                <button class="theme-toggle" onclick="toggleTheme()" title="{{ _('toggle_theme') }}" id="themeToggle">
+                    {{ icon('moon', 'ic-moon') }}{{ icon('sun', 'ic-sun') }}
+                </button>
             </div>
             {% endif %}
         </header>
@@ -90,24 +79,24 @@
     <div class="modal-backdrop" id="langModal">
         <div class="modal" style="max-width: 320px;">
             <div class="modal-header">
-                <h2 class="modal-title">{{ _('select_lang') }}</h2>
-                <button class="modal-close" onclick="closeModal('langModal')">×</button>
+                <h2 class="modal-title">{{ icon('globe') }} {{ _('select_lang') }}</h2>
+                <button class="modal-close" onclick="closeModal('langModal')">{{ icon('x') }}</button>
             </div>
             <div style="display: flex; flex-direction: column; gap: var(--space-sm);">
                 {% set langs = [
-                ('en', '🇺🇸', 'lang_en'),
-                ('ru', '🇷🇺', 'lang_ru'),
-                ('fr', '🇫🇷', 'lang_fr'),
-                ('zh', '🇨🇳', 'lang_zh'),
-                ('fa', '🇮🇷', 'lang_fa')
+                ('en', 'EN', 'lang_en'),
+                ('ru', 'RU', 'lang_ru'),
+                ('fr', 'FR', 'lang_fr'),
+                ('zh', 'ZH', 'lang_zh'),
+                ('fa', 'FA', 'lang_fa')
                 ] %}
-                {% for l_code, l_flag, l_key in langs %}
+                {% for l_code, l_code_label, l_key in langs %}
                 <a href="/set_lang/{{ l_code }}" class="btn btn-secondary"
                     style="justify-content: flex-start; gap: var(--space-md); padding: var(--space-md);">
-                    <span style="font-size: 1.4rem;">{{ l_flag }}</span>
-                    <span style="font-weight: 500;">{{ _(l_key) }}</span>
+                    <span class="font-mono" style="font-weight:600; font-size:0.72rem; letter-spacing:0.1em;">{{ l_code_label }}</span>
+                    <span style="font-weight: 600;">{{ _(l_key) }}</span>
                     {% if lang == l_code %}
-                    <span class="lang-check">✓</span>
+                    <span class="lang-check">{{ icon('check') }}</span>
                     {% endif %}
                 </a>
                 {% endfor %}
@@ -119,33 +108,21 @@
         window.I18N = {{ translations_json | safe }};
         window._ = function (key) { return window.I18N[key] || key; };
 
+        /* Icon helper for JS-generated markup (matches _icons.html macro) */
+        window.icon = function (name, cls) {
+            return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
+        };
+
         /* ===== Theme Toggle ===== */
         (function () {
             const saved = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', saved);
-
-            const updateUI = () => {
-                const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-                document.querySelectorAll('.theme-toggle').forEach(btn => {
-                    const isLang = btn.getAttribute('onclick').includes('langModal');
-                    if (!isLang) {
-                        btn.textContent = isLight ? '☀️' : '🌙';
-                    }
-                });
-            };
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', updateUI);
-            } else {
-                updateUI();
-            }
 
             window.toggleTheme = function () {
                 const current = document.documentElement.getAttribute('data-theme') || 'dark';
                 const next = current === 'dark' ? 'light' : 'dark';
                 document.documentElement.setAttribute('data-theme', next);
                 localStorage.setItem('theme', next);
-                updateUI();
             };
         })();
 
@@ -165,8 +142,8 @@
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
 
-            const icons = { success: '✓', error: '✕', info: 'ℹ' };
-            toast.innerHTML = `<span>${icons[type] || 'ℹ'}</span> <span>${message}</span>`;
+            const icons = { success: 'check', error: 'x', info: 'info' };
+            toast.innerHTML = window.icon(icons[type] || 'info') + ` <span>${message}</span>`;
 
             container.appendChild(toast);
             setTimeout(() => {

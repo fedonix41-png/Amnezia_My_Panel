@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 
 {% block title_extra %} — {{ _('share_title') }}{% endblock %}
 
@@ -14,7 +15,7 @@
 
     {% if need_password %}
     <div style="padding: var(--space-lg); text-align: center;">
-        <div class="logo-icon" style="font-size: 3rem; margin-bottom: var(--space-md);">🔐</div>
+        <div class="logo-icon" style="font-size: 3rem; margin-bottom: var(--space-md);">{{ icon('key') }}</div>
         <p style="margin-bottom: var(--space-md);">{{ _('share_protected_desc') }}
         </p>
 
@@ -51,7 +52,7 @@
     <div class="modal" style="max-width: 600px;">
         <div class="modal-header">
             <h2 class="modal-title" id="configModalTitle">{{ _('config') }}</h2>
-            <button class="modal-close" onclick="closeModal('configModal')">×</button>
+            <button class="modal-close" onclick="closeModal('configModal')">{{ icon('x') }}</button>
         </div>
 
         <div class="config-tabs">
@@ -225,25 +226,6 @@
 <style>
     .w-full {
         width: 100%;
-    }
-
-    .spinner {
-        border: 3px solid rgba(255, 255, 255, 0.1);
-        border-top: 3px solid var(--accent-color);
-        border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        0% {
-            transform: rotate(0deg);
-        }
-
-        100% {
-            transform: rotate(360deg);
-        }
     }
 </style>
 {% endblock %}

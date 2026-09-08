@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 
 {% block title_extra %} — {{ _('my_connections_title') }}{% endblock %}
 
 {% block content %}
 <section>
     <h1 class="section-title">
-        <span class="icon">🔗</span>
+        <span class="icon">{{ icon('link') }}</span>
         {{ _('my_connections_title') }}
     </h1>
 
@@ -14,17 +15,17 @@
         {% for c in connections %}
         <div class="client-item">
             <div class="client-info">
-                <div class="client-avatar">🔗</div>
+                <div class="client-avatar">{{ icon('link') }}</div>
                 <div>
                     <div class="client-name">{{ c.name or 'VPN Connection' }}</div>
                     <div class="client-meta">
-                        <span>🖥 {{ c.server_name }}</span>
+                        <span>{{ icon('server') }} {{ c.server_name }}</span>
                         <span class="badge badge-info" style="font-size:0.65rem;">
                             {{ 'AmneziaWG' if c.protocol == 'awg' else ('AmneziaWG 2.0' if c.protocol == 'awg2' else ('AWG Legacy' if c.protocol == 'awg_legacy' else
                             ('Xray' if c.protocol == 'xray' else c.protocol | upper))) }}
                         </span>
                         {% if c.created_at %}
-                        <span>📅 {{ c.created_at[:10] }}</span>
+                        <span>{{ icon('calendar') }} {{ c.created_at[:10] }}</span>
                         {% endif %}
                     </div>
                 </div>
@@ -40,7 +41,7 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <div class="empty-icon">🔗</div>
+        <div class="empty-icon">{{ icon('link') }}</div>
         <div class="empty-title">{{ _('no_connections') }}</div>
         <div class="empty-desc">{{ _('no_connections_user_desc') }}</div>
     </div>
@@ -52,7 +53,7 @@
     <div class="modal" style="max-width: 600px;">
         <div class="modal-header">
             <h2 class="modal-title" id="configModalTitle">{{ _('config') }}</h2>
-            <button class="modal-close" onclick="closeModal('configModal')">×</button>
+            <button class="modal-close" onclick="closeModal('configModal')">{{ icon('x') }}</button>
         </div>
 
         <div class="config-tabs">

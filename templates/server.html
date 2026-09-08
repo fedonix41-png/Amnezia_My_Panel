@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 
 {% block title_extra %} — {{ server.name }}{% endblock %}
 
@@ -13,58 +14,6 @@
         gap: var(--space-xs) !important;
         align-items: center;
     }
-    .marketplace-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: var(--space-md);
-    }
-    .marketplace-category {
-        margin-bottom: var(--space-lg);
-    }
-    .marketplace-category-title {
-        font-weight: 700;
-        margin-bottom: var(--space-sm);
-        display: flex;
-        align-items: center;
-        gap: var(--space-xs);
-    }
-    .marketplace-app-card {
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        padding: var(--space-md);
-        background: var(--bg-secondary);
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-sm);
-    }
-    .marketplace-app-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--space-sm);
-    }
-    .marketplace-app-title {
-        font-weight: 700;
-    }
-    .marketplace-app-desc {
-        color: var(--text-muted);
-        font-size: 0.88rem;
-        line-height: 1.35;
-        min-height: 2.4em;
-    }
-    .server-status-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--space-md);
-        flex-wrap: wrap;
-    }
-    .server-status-actions {
-        display: flex;
-        align-items: center;
-        gap: var(--space-sm);
-        margin-left: auto;
-    }
     .installed-app-hidden,
     .promo-block.installed-app-hidden,
     .protocol-cards > .promo-block {
@@ -76,37 +25,30 @@
     .apps-loading {
         margin-bottom: var(--space-xl);
         min-height: 140px;
-        border: 1px dashed var(--border-color);
         border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-inset);
         display: flex;
         align-items: center;
         justify-content: center;
         gap: var(--space-sm);
         color: var(--text-muted);
-        background: var(--bg-secondary);
-    }
-    .config-editor-wrap {
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-lg);
-        overflow: hidden;
-        background: #111827;
     }
     .config-editor-wrap .CodeMirror {
         height: 50vh;
         min-height: 360px;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family: var(--font-mono);
         font-size: 13px;
         line-height: 1.55;
     }
     .config-editor-wrap .CodeMirror-gutters {
-        border-right: 1px solid rgba(255,255,255,0.08);
+        border-right: 1px solid var(--border-color);
     }
     .config-editor-fallback {
         width: 100%;
         height: 50vh;
         min-height: 360px;
         resize: vertical;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family: var(--font-mono);
         white-space: pre;
         padding: var(--space-sm);
     }
@@ -125,9 +67,9 @@
 <div class="card" style="margin-bottom: var(--space-xl);">
     <div class="flex items-center justify-between" style="flex-wrap: wrap; gap: var(--space-md);">
         <div class="flex items-center gap-md">
-            <div class="server-icon" style="width:56px; height:56px; font-size:1.6rem;">🖥</div>
+            <div class="server-icon" style="width:56px; height:56px;">{{ icon('server') }}</div>
             <div>
-                <h1 style="font-size:1.4rem; font-weight:700;">{{ server.name }}</h1>
+                <h1 style="font-family:var(--font-display); font-size:1.15rem; font-weight:700; letter-spacing:0.01em;">{{ server.name }}</h1>
                 <div class="font-mono text-muted text-sm">{{ server.host }}:{{ server.ssh_port }} • {{ server.username
                     }}</div>
             </div>
@@ -146,10 +88,10 @@
             <div class="flex gap-md" style="flex-wrap:wrap" id="statusBadges"></div>
             <div class="server-status-actions">
                 <button class="btn btn-primary btn-sm" onclick="openMarketplaceModal()" id="marketplaceBtn">
-                    <span>🛒</span> {{ _('marketplace') }}
+                    {{ icon('cart') }} {{ _('marketplace') }}
                 </button>
                 <button class="btn btn-secondary btn-sm" onclick="openManagementModal()" id="managementBtn">
-                    <span>⚙️</span> {{ _('management') }}
+                    {{ icon('settings') }} {{ _('management') }}
                 </button>
             </div>
         </div>
@@ -163,7 +105,7 @@
     <span>{{ _('checking_server') }}</span>
 </div>
 <div class="empty-state hidden" id="installedAppsEmpty" style="padding: var(--space-xl) 0; margin-bottom: var(--space-xl);">
-    <div class="empty-icon">🛒</div>
+    <div class="empty-icon">{{ icon('cart') }}</div>
     <div class="empty-title">{{ _('no_installed_apps') }}</div>
     <div class="empty-desc">{{ _('no_installed_apps_desc') }}</div>
     <button class="btn btn-primary btn-sm" onclick="openMarketplaceModal()" style="margin-top: var(--space-md);">
@@ -175,7 +117,7 @@
     <!-- AWG2 Card (first - new version) -->
     <div class="card card-hover protocol-card protocol-awg" id="proto-awg2">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">✨</div>
+            <div class="protocol-icon">{{ icon('sparkles') }}</div>
             <div class="flex gap-sm" id="awg2-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">AmneziaWG 2.0 <span
@@ -201,7 +143,7 @@
     <!-- AWG Card -->
     <div class="card card-hover protocol-card protocol-awg" id="proto-awg">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">🔮</div>
+            <div class="protocol-icon">{{ icon('hexagon') }}</div>
             <div class="flex gap-sm" id="awg-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">AmneziaWG</div>
@@ -225,7 +167,7 @@
     <!-- AWG Legacy Card -->
     <div class="card card-hover protocol-card protocol-legacy" id="proto-awg-legacy">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">📡</div>
+            <div class="protocol-icon">{{ icon('radio') }}</div>
             <div class="flex gap-sm" id="awg-legacy-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">AmneziaWG Legacy</div>
@@ -249,7 +191,7 @@
     <!-- Xray Card -->
     <div class="card card-hover protocol-card protocol-xray" id="proto-xray">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">⚡</div>
+            <div class="protocol-icon">{{ icon('zap') }}</div>
             <div class="flex gap-sm" id="xray-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">Xray (VLESS-Reality)</div>
@@ -273,7 +215,7 @@
     <!-- Telemt Card -->
     <div class="card card-hover protocol-card protocol-telemt" id="proto-telemt">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">✈</div>
+            <div class="protocol-icon">{{ icon('send') }}</div>
             <div class="flex gap-sm" id="telemt-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">Telemt (Telegram Proxy)</div>
@@ -297,7 +239,7 @@
     <!-- WireGuard Card -->
     <div class="card card-hover protocol-card protocol-wireguard" id="proto-wireguard">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">🔒</div>
+            <div class="protocol-icon">{{ icon('lock') }}</div>
             <div class="flex gap-sm" id="wireguard-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">WireGuard</div>
@@ -325,15 +267,15 @@
             <span class="promo-orb"></span>
             <span class="promo-orb"></span>
         </div>
-        <span class="promo-lock-badge">🔒 {{ _('coming_soon') }}</span>
+        <span class="promo-lock-badge">{{ icon('lock') }} {{ _('coming_soon') }}</span>
         <div class="promo-content">
-            <div class="promo-icon" aria-hidden="true">🧠</div>
+            <div class="promo-icon" aria-hidden="true">{{ icon('cpu') }}</div>
             <div class="promo-text">
                 <div class="promo-title">AIVPN</div>
                 <div class="promo-subtitle">{{ _('aivpn_subtitle') }}</div>
             </div>
             <a class="promo-cta" href="https://github.com/PRVTPRO/Amnezia-Web-Panel" target="_blank" rel="noopener">
-                ⭐ <span>{{ _('promo_star_cta') }}</span>
+                {{ icon('star') }} <span>{{ _('promo_star_cta') }}</span>
             </a>
         </div>
     </div>
@@ -341,7 +283,7 @@
     <!-- DNS Card -->
     <div class="card card-hover protocol-card protocol-dns" id="proto-dns">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">🔍</div>
+            <div class="protocol-icon">{{ icon('search') }}</div>
             <div class="flex gap-sm" id="dns-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">AmneziaDNS</div>
@@ -365,7 +307,7 @@
     <!-- AdGuard Home Card -->
     <div class="card card-hover protocol-card protocol-adguard" id="proto-adguard">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">🛡️</div>
+            <div class="protocol-icon">{{ icon('shield-check') }}</div>
             <div class="flex gap-sm" id="adguard-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">AdGuard Home</div>
@@ -389,7 +331,7 @@
     <!-- SOCKS5 Card -->
     <div class="card card-hover protocol-card protocol-socks5" id="proto-socks5">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">🧦</div>
+            <div class="protocol-icon">{{ icon('network') }}</div>
             <div class="flex gap-sm" id="socks5-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">SOCKS5 Proxy</div>
@@ -414,7 +356,7 @@
     <!-- NGINX Card -->
     <div class="card card-hover protocol-card protocol-nginx" id="proto-nginx">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
-            <div class="protocol-icon">🌐</div>
+            <div class="protocol-icon">{{ icon('globe') }}</div>
             <div class="flex gap-sm" id="nginx-ctrl" style="display:none!important;"></div>
         </div>
         <div class="protocol-name">NGINX</div>
@@ -443,15 +385,15 @@
             <span class="promo-orb"></span>
             <span class="promo-orb"></span>
         </div>
-        <span class="promo-lock-badge">🔒 {{ _('coming_soon') }}</span>
+        <span class="promo-lock-badge">{{ icon('lock') }} {{ _('coming_soon') }}</span>
         <div class="promo-content">
-            <div class="promo-icon" aria-hidden="true">🛡️</div>
+            <div class="promo-icon" aria-hidden="true">{{ icon('shield') }}</div>
             <div class="promo-text">
                 <div class="promo-title">{{ _('revproxy_title') }}</div>
                 <div class="promo-subtitle">{{ _('revproxy_subtitle') }}</div>
             </div>
             <a class="promo-cta" href="https://github.com/PRVTPRO/Amnezia-Web-Panel" target="_blank" rel="noopener">
-                ⭐ <span>{{ _('promo_star_cta') }}</span>
+                {{ icon('star') }} <span>{{ _('promo_star_cta') }}</span>
             </a>
         </div>
     </div>
@@ -463,15 +405,15 @@
         <span class="promo-orb"></span>
         <span class="promo-orb"></span>
     </div>
-    <span class="promo-lock-badge">🔒 Coming soon</span>
+    <span class="promo-lock-badge">{{ icon('lock') }} Coming soon</span>
     <div class="promo-content">
-        <div class="promo-icon" aria-hidden="true">🧠</div>
+        <div class="promo-icon" aria-hidden="true">{{ icon('cpu') }}</div>
         <div class="promo-text">
             <div class="promo-title">AIVPN</div>
             <div class="promo-subtitle">AI-driven protocol selection that picks the right tunnel for the moment. Land it sooner — drop a star.</div>
         </div>
         <a class="promo-cta" href="https://github.com/PRVTPRO/Amnezia-Web-Panel" target="_blank" rel="noopener">
-            ⭐ <span>Star us on GitHub</span>
+            {{ icon('star') }} <span>Star us on GitHub</span>
         </a>
     </div>
 </div>
@@ -480,7 +422,7 @@
 <div class="clients-section" id="connectionsSection" style="display:none;">
     <div class="clients-header">
         <h2 class="section-title" style="margin-bottom:0;">
-            <span class="icon">🔗</span>
+            <span class="icon">{{ icon('link') }}</span>
             {{ _('connections') }}
         </h2>
         <div class="flex gap-sm items-center">
@@ -494,7 +436,7 @@
                 <option value="wireguard">WireGuard</option>
             </select>
             <button class="btn btn-primary btn-sm" onclick="openAddConnectionModal()">
-                <span>＋</span> {{ _('add') }}
+                {{ icon('plus') }} {{ _('add') }}
             </button>
         </div>
     </div>
@@ -505,7 +447,7 @@
             <span>{{ _('loading_connections') }}</span>
         </div>
         <div id="connectionsEmpty" class="empty-state hidden" style="padding: var(--space-xl) 0;">
-            <div class="empty-icon">🔗</div>
+            <div class="empty-icon">{{ icon('link') }}</div>
             <div class="empty-title">{{ _('no_connections') }}</div>
             <div class="empty-desc">{{ _('no_connections_desc') }}</div>
         </div>
@@ -518,10 +460,10 @@
     <div class="modal" style="max-width: 980px;">
         <div class="modal-header">
             <div>
-                <h2 class="modal-title">🛒 {{ _('marketplace') }}</h2>
+                <h2 class="modal-title">{{ icon('cart') }} {{ _('marketplace') }}</h2>
                 <div class="text-muted text-sm">{{ _('marketplace_desc') }}</div>
             </div>
-            <button class="modal-close" onclick="closeModal('marketplaceModal')">×</button>
+            <button class="modal-close" onclick="closeModal('marketplaceModal')">{{ icon('x') }}</button>
         </div>
         <div id="marketplaceContent"></div>
     </div>
@@ -532,10 +474,10 @@
     <div class="modal" style="max-width: 520px;">
         <div class="modal-header">
             <div>
-                <h2 class="modal-title">⚙️ {{ _('server_management') }}</h2>
+                <h2 class="modal-title">{{ icon('settings') }} {{ _('server_management') }}</h2>
                 <div class="text-muted text-sm">{{ _('server_management_desc') }}</div>
             </div>
-            <button class="modal-close" onclick="closeModal('managementModal')">×</button>
+            <button class="modal-close" onclick="closeModal('managementModal')">{{ icon('x') }}</button>
         </div>
         <div id="managementContent"></div>
     </div>
@@ -546,7 +488,7 @@
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title" id="installModalTitle">{{ _('install_protocol') }}</h2>
-            <button class="modal-close" onclick="closeModal('installModal')">×</button>
+            <button class="modal-close" onclick="closeModal('installModal')">{{ icon('x') }}</button>
         </div>
 
         <div id="installForm">
@@ -684,7 +626,7 @@
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title">{{ _('socks5_settings_title') }}</h2>
-            <button class="modal-close" onclick="closeModal('socks5SettingsModal')">×</button>
+            <button class="modal-close" onclick="closeModal('socks5SettingsModal')">{{ icon('x') }}</button>
         </div>
         <div class="form-group">
             <label class="form-label">{{ _('port') }}</label>
@@ -714,7 +656,7 @@
     <div class="modal" style="max-width:680px;">
         <div class="modal-header">
             <h2 class="modal-title" id="siteConfigModalTitle">{{ _('site_editor') }}</h2>
-            <button class="modal-close" onclick="closeModal('siteConfigModal')">×</button>
+            <button class="modal-close" onclick="closeModal('siteConfigModal')">{{ icon('x') }}</button>
         </div>
         <div class="config-display" style="margin-top:var(--space-md);">
             <input type="hidden" id="siteConfigProto" value="nginx" />
@@ -746,7 +688,7 @@
     <div class="modal" style="max-width:720px;">
         <div class="modal-header">
             <h2 class="modal-title" id="backupModalTitle">{{ _('backups') }}</h2>
-            <button class="modal-close" onclick="closeModal('backupModal')">×</button>
+            <button class="modal-close" onclick="closeModal('backupModal')">{{ icon('x') }}</button>
         </div>
         <input type="hidden" id="backupProto" value="" />
         <div class="form-hint" style="margin-bottom:var(--space-md);">{{ _('backup_desc') }}</div>
@@ -758,7 +700,7 @@
         </div>
         <div id="backupLoading" class="form-hint hidden">{{ _('loading') }}</div>
         <div id="backupEmpty" class="empty-state hidden" style="padding:var(--space-xl);">
-            <div class="empty-icon">📦</div>
+            <div class="empty-icon">{{ icon('package') }}</div>
             <div class="empty-title">{{ _('no_backups') }}</div>
             <div class="empty-desc">{{ _('no_backups_desc') }}</div>
         </div>
@@ -772,7 +714,7 @@
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title" id="addConnectionModalTitle">{{ _('add_connection') }}</h2>
-            <button class="modal-close" onclick="closeModal('addConnectionModal')">×</button>
+            <button class="modal-close" onclick="closeModal('addConnectionModal')">{{ icon('x') }}</button>
         </div>
 
         <div class="form-group" id="connectionNameGroup">
@@ -835,7 +777,7 @@
     <div class="modal" style="max-width: 600px;">
         <div class="modal-header">
             <h2 class="modal-title" id="configModalTitle">{{ _('config') }}</h2>
-            <button class="modal-close" onclick="closeModal('configModal')">×</button>
+            <button class="modal-close" onclick="closeModal('configModal')">{{ icon('x') }}</button>
         </div>
 
         <!-- Tabs -->
@@ -888,7 +830,7 @@
     <div class="modal" style="max-width:680px;">
         <div class="modal-header">
             <h2 class="modal-title" id="serverConfigModalTitle">{{ _('server_config') }}</h2>
-            <button class="modal-close" onclick="closeModal('serverConfigModal')">×</button>
+            <button class="modal-close" onclick="closeModal('serverConfigModal')">{{ icon('x') }}</button>
         </div>
         <div class="config-display" style="margin-top:var(--space-md);">
             <!-- Hidden input to store current proto -->
@@ -929,21 +871,21 @@
     const SERVER_ID = {{ server_id }};
     const SERVER_HOST = "{{ server.host }}";
     const MARKETPLACE_APPS = [
-        { proto: 'awg2', category: 'protocols', icon: '✨', title: 'AmneziaWG 2.0', descKey: 'awg_desc', badge: 'NEW' },
-        { proto: 'awg', category: 'protocols', icon: '🔮', title: 'AmneziaWG', descKey: 'awg_desc' },
-        { proto: 'awg_legacy', category: 'protocols', icon: '📡', title: 'AmneziaWG Legacy', descKey: 'awg_legacy_desc' },
-        { proto: 'xray', category: 'protocols', icon: '⚡', title: 'Xray (VLESS-Reality)', descKey: 'xray_desc' },
-        { proto: 'telemt', category: 'protocols', icon: '✈', title: 'Telemt (Telegram Proxy)', descKey: 'telemt_desc' },
-        { proto: 'wireguard', category: 'protocols', icon: '🔒', title: 'WireGuard', descKey: 'wireguard_desc' },
-        { proto: 'dns', category: 'services', icon: '🔍', title: 'AmneziaDNS', descKey: 'dns_desc' },
-        { proto: 'adguard', category: 'services', icon: '🛡️', title: 'AdGuard Home', descKey: 'adguard_desc' },
-        { proto: 'socks5', category: 'services', icon: '🧦', title: 'SOCKS5 Proxy', descKey: 'socks5_desc' },
-        { proto: 'nginx', category: 'web_servers', icon: '🌐', title: 'NGINX', descKey: 'nginx_desc' },
+        { proto: 'awg2', category: 'protocols', icon: 'sparkles', title: 'AmneziaWG 2.0', descKey: 'awg_desc', badge: 'NEW' },
+        { proto: 'awg', category: 'protocols', icon: 'hexagon', title: 'AmneziaWG', descKey: 'awg_desc' },
+        { proto: 'awg_legacy', category: 'protocols', icon: 'radio', title: 'AmneziaWG Legacy', descKey: 'awg_legacy_desc' },
+        { proto: 'xray', category: 'protocols', icon: 'zap', title: 'Xray (VLESS-Reality)', descKey: 'xray_desc' },
+        { proto: 'telemt', category: 'protocols', icon: 'send', title: 'Telemt (Telegram Proxy)', descKey: 'telemt_desc' },
+        { proto: 'wireguard', category: 'protocols', icon: 'lock', title: 'WireGuard', descKey: 'wireguard_desc' },
+        { proto: 'dns', category: 'services', icon: 'search', title: 'AmneziaDNS', descKey: 'dns_desc' },
+        { proto: 'adguard', category: 'services', icon: 'shield-check', title: 'AdGuard Home', descKey: 'adguard_desc' },
+        { proto: 'socks5', category: 'services', icon: 'network', title: 'SOCKS5 Proxy', descKey: 'socks5_desc' },
+        { proto: 'nginx', category: 'web_servers', icon: 'globe', title: 'NGINX', descKey: 'nginx_desc' },
     ];
     const MARKETPLACE_CATEGORIES = [
-        { id: 'protocols', icon: '🔐', titleKey: 'protocols' },
-        { id: 'services', icon: '🛠', titleKey: 'services' },
-        { id: 'web_servers', icon: '🌐', titleKey: 'web_servers' },
+        { id: 'protocols', icon: 'key', titleKey: 'protocols' },
+        { id: 'services', icon: 'wrench', titleKey: 'services' },
+        { id: 'web_servers', icon: 'globe', titleKey: 'web_servers' },
     ];
     let currentInstallProto = 'awg';
     let currentInstallAnother = false;
@@ -1018,16 +960,16 @@
         el.innerHTML = `
             <div class="flex" style="flex-direction: column; gap: var(--space-sm);">
                 <button class="btn btn-secondary" onclick="closeModal('managementModal'); checkServer(true);" style="justify-content: flex-start; padding: 12px 20px;">
-                    <span style="font-size: 1.2rem; margin-right: 8px;">🔄</span> ${_('check_server_services')}
+                    ${window.icon('refresh')} ${_('check_server_services')}
                 </button>
                 <button class="btn btn-warning" onclick="closeModal('managementModal'); rebootServer();" style="justify-content: flex-start; padding: 12px 20px;">
-                    <span style="font-size: 1.2rem; margin-right: 8px;">🔁</span> ${_('reboot_server')}
+                    ${window.icon('repeat')} ${_('reboot_server')}
                 </button>
                 <button class="btn btn-danger" onclick="closeModal('managementModal'); clearServer();" style="justify-content: flex-start; padding: 12px 20px;">
-                    <span style="font-size: 1.2rem; margin-right: 8px;">🧹</span> ${_('clear_server')}
+                    ${window.icon('eraser')} ${_('clear_server')}
                 </button>
                 <button class="btn btn-danger" onclick="closeModal('managementModal'); deleteServer();" style="justify-content: flex-start; padding: 12px 20px;">
-                    <span style="font-size: 1.2rem; margin-right: 8px;">🗑️</span> ${_('remove_server')}
+                    ${window.icon('trash')} ${_('remove_server')}
                 </button>
             </div>
         `;
@@ -1057,7 +999,7 @@
             const apps = MARKETPLACE_APPS.filter(app => app.category === cat.id);
             return `
                 <div class="marketplace-category">
-                    <div class="marketplace-category-title"><span>${cat.icon}</span> ${_(cat.titleKey)}</div>
+                    <div class="marketplace-category-title">${window.icon(cat.icon)} ${_(cat.titleKey)}</div>
                     <div class="marketplace-grid">
                         ${apps.map(app => {
                             const installed = baseInstalled(app.proto);
@@ -1066,7 +1008,7 @@
                                 <div class="marketplace-app-card">
                                     <div class="marketplace-app-top">
                                         <div class="flex items-center gap-sm">
-                                            <div class="protocol-icon" style="width:38px;height:38px;font-size:1.2rem;">${app.icon}</div>
+                                            <div class="protocol-icon" style="width:38px;height:38px;">${window.icon(app.icon)}</div>
                                             <div>
                                                 <div class="marketplace-app-title">${app.title} ${app.badge ? `<span class="badge badge-info" style="font-size:0.65rem;">${app.badge}</span>` : ''}</div>
                                                 ${marketplaceAppStatus(app.proto)}
@@ -1192,10 +1134,10 @@
             const el = document.getElementById('serverStats');
             el.style.display = '';
             el.innerHTML = `
-                <span class="stat-pill" title="CPU">⚡ ${stats.cpu || 0}%</span>
-                <span class="stat-pill" title="RAM: ${formatBytes(stats.ram_used)} / ${formatBytes(stats.ram_total)}">🧠 ${stats.ram_percent || 0}%</span>
-                <span class="stat-pill" title="Disk: ${formatBytes(stats.disk_used)} / ${formatBytes(stats.disk_total)}">💾 ${stats.disk_percent || 0}%</span>
-                <span class="stat-pill" title="Network">🌐 ↓${formatBytes(stats.net_rx)} ↑${formatBytes(stats.net_tx)}</span>
+                <span class="stat-pill" title="CPU">${window.icon('zap')} ${stats.cpu || 0}%</span>
+                <span class="stat-pill" title="RAM: ${formatBytes(stats.ram_used)} / ${formatBytes(stats.ram_total)}">${window.icon('cpu')} ${stats.ram_percent || 0}%</span>
+                <span class="stat-pill" title="Disk: ${formatBytes(stats.disk_used)} / ${formatBytes(stats.disk_total)}">${window.icon('database')} ${stats.disk_percent || 0}%</span>
+                <span class="stat-pill" title="Network">${window.icon('activity')} ↓${formatBytes(stats.net_rx)} ↑${formatBytes(stats.net_tx)}</span>
             `;
         } catch (err) {
             console.warn('Stats load failed:', err);
@@ -1820,7 +1762,7 @@
             fillEl.style.width = '100%';
             if (result.log) {
                 result.log.forEach(line => {
-                    logEl.innerHTML += `<div class="log-line success">✓ ${line}</div>`;
+                    logEl.innerHTML += `<div class="log-line success">[OK] ${line}</div>`;
                 });
             }
             logEl.scrollTop = logEl.scrollHeight;
@@ -1830,7 +1772,7 @@
         } catch (err) {
             fillEl.style.width = '100%';
             fillEl.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
-            logEl.innerHTML += `<div class="log-line error">✕ ${_('error')}: ${err.message}</div>`;
+            logEl.innerHTML += `<div class="log-line error">[ERR] ${_('error')}: ${err.message}</div>`;
             logEl.scrollTop = logEl.scrollHeight;
             showToast(_('install_error') + err.message, 'error');
             document.getElementById('installDone').style.display = '';
@@ -2030,17 +1972,17 @@
                 const assignedUser = client.assigned_user || '';
 
                 let metaHtml = '';
-                if (assignedUser) metaHtml += `<span class="badge badge-info" style="font-size:0.65rem;">👤 ${escapeHtml(assignedUser)}</span>`;
-                if (created) metaHtml += `<span>📅 ${formatDate(created)}</span>`;
+                if (assignedUser) metaHtml += `<span class="badge badge-info" style="font-size:0.65rem;">${window.icon('user')} ${escapeHtml(assignedUser)}</span>`;
+                if (created) metaHtml += `<span>${window.icon('calendar')} ${formatDate(created)}</span>`;
 
                 if (proto === 'telemt') {
-                    if (userData.total_octets) metaHtml += `<span class="traffic-badge">📊 ${formatBytes(userData.total_octets)}</span>`;
-                    if (userData.current_connections !== undefined) metaHtml += `<span>🔌 ${userData.current_connections} conns</span>`;
-                    if (userData.active_ips !== undefined) metaHtml += `<span>📍 ${userData.active_ips} IPs</span>`;
+                    if (userData.total_octets) metaHtml += `<span class="traffic-badge">${window.icon('chart')} ${formatBytes(userData.total_octets)}</span>`;
+                    if (userData.current_connections !== undefined) metaHtml += `<span>${window.icon('plug')} ${userData.current_connections} conns</span>`;
+                    if (userData.active_ips !== undefined) metaHtml += `<span>${window.icon('pin')} ${userData.active_ips} IPs</span>`;
                     if (userData.quota) metaHtml += `<span class="badge" style="font-size:0.65rem;">Quota: ${formatBytes(userData.quota)}</span>`;
-                    if (userData.expiry) metaHtml += `<span class="badge" style="font-size:0.65rem;">⌛ ${formatDate(userData.expiry)}</span>`;
+                    if (userData.expiry) metaHtml += `<span class="badge" style="font-size:0.65rem;">${window.icon('clock')} ${formatDate(userData.expiry)}</span>`;
                 } else {
-                    if (handshake) metaHtml += `<span>🤝 ${handshake}</span>`;
+                    if (handshake) metaHtml += `<span>${window.icon('clock')} ${handshake}</span>`;
                     if (received) metaHtml += `<span class="traffic-badge traffic-down">↓ ${received}</span>`;
                     if (sent) metaHtml += `<span class="traffic-badge traffic-up">↑ ${sent}</span>`;
                 }
@@ -2048,11 +1990,11 @@
                 if (!enabled) metaHtml += `<span class="badge badge-danger" style="font-size:0.65rem">${_('stop')}</span>`;
 
                 const disabledStyle = enabled ? '' : 'opacity:0.5;';
-                const toggleIcon = enabled ? '🔵' : '⚫';
+                const toggleIcon = `<span class=\"toggle-dot ${enabled ? 'on' : 'off'}\"></span>`;
                 const toggleTitle = enabled ? _('stop') : _('starting');
                 // Show config button for all WireGuard-based clients.
                 // If clientPrivateKey is missing (created via native app), we show a warning instead.
-                const canShowConfig = proto === 'xray' || true; // always show 📄 button
+                const canShowConfig = proto === 'xray' || true; // always show the config button
 
                 listEl.innerHTML += `
                     <div class="client-item" style="${disabledStyle}">
@@ -2064,10 +2006,10 @@
                             </div>
                         </div>
                         <div class="client-actions">
-                            <button class="btn btn-secondary btn-sm btn-icon" onclick="showConnectionConfig('${escapeJs(client.clientId)}', '${escapeJs(name)}', ${!!userData.clientPrivateKey || proto === 'xray' || proto === 'telemt'})" title="${_('config')}">📄</button>
-                            ${proto === 'telemt' ? `<button class="btn btn-secondary btn-sm btn-icon" onclick="editConnection('${escapeJs(client.clientId)}')" title="${_('edit')}">✏️</button>` : ''}
+                            <button class="btn btn-secondary btn-sm btn-icon" onclick="showConnectionConfig('${escapeJs(client.clientId)}', '${escapeJs(name)}', ${!!userData.clientPrivateKey || proto === 'xray' || proto === 'telemt'})" title="${_('config')}">${window.icon('file-text')}</button>
+                            ${proto === 'telemt' ? `<button class="btn btn-secondary btn-sm btn-icon" onclick="editConnection('${escapeJs(client.clientId)}')" title="${_('edit')}">${window.icon('pencil')}</button>` : ''}
                             <button class="btn btn-secondary btn-sm btn-icon" onclick="toggleConnection('${escapeJs(client.clientId)}', ${!enabled})" title="${toggleTitle}">${toggleIcon}</button>
-                            <button class="btn btn-danger btn-sm btn-icon" onclick="removeConnection('${escapeJs(client.clientId)}')" title="${_('delete')}">🗑</button>
+                            <button class="btn btn-danger btn-sm btn-icon" onclick="removeConnection('${escapeJs(client.clientId)}')" title="${_('delete')}">${window.icon('trash')}</button>
                         </div>
                     </div>
                 `;
@@ -2206,7 +2148,7 @@
             currentConfig = '';
             currentVpnLink = '';
             currentConfigName = connName.replace(/\s+/g, '_');
-            document.getElementById('configText').innerHTML = `<div style="padding:var(--space-md);background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color);"><div style="font-size:1.4rem;margin-bottom:var(--space-sm);">⚠️</div><div style="font-weight:600;margin-bottom:var(--space-sm);">${_('config_unavailable')}</div><div style="font-size:0.85rem;color:var(--text-muted);line-height:1.6;">${_('config_unavailable_desc').replace(/\\n/g, '<br>')}<br><br><strong>${_('client_public_key')}</strong><br><code style="word-break:break-all;font-size:0.78rem;">${escapeHtml(clientId)}</code></div></div>`;
+            document.getElementById('configText').innerHTML = `<div style="padding:var(--space-md);background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color);"><div style="font-size:1.4rem;margin-bottom:var(--space-sm);color:var(--warning);">${window.icon('alert')}</div><div style="font-weight:600;margin-bottom:var(--space-sm);">${_('config_unavailable')}</div><div style="font-size:0.85rem;color:var(--text-muted);line-height:1.6;">${_('config_unavailable_desc').replace(/\\n/g, '<br>')}<br><br><strong>${_('client_public_key')}</strong><br><code style="word-break:break-all;font-size:0.78rem;">${escapeHtml(clientId)}</code></div></div>`;
             document.getElementById('vpnLinkText').textContent = '';
             document.getElementById('panel-vpn').style.display = 'none';
             document.getElementById('panel-qr').style.display = 'none';
@@ -2319,7 +2261,7 @@
     }
 
     async function clearServer() {
-        if (!confirm("⚠️ WARNING: This will completely delete all Amnezia configurations, containers, and data from /opt/amnezia on the server! Are you absolutely sure?")) return;
+        if (!confirm("WARNING: This will completely delete all Amnezia configurations, containers, and data from /opt/amnezia on the server! Are you absolutely sure?")) return;
         try {
             showToast('Clearing server from Amnezia software...', 'info');
             await apiCall(`/api/servers/${SERVER_ID}/clear`, 'POST');

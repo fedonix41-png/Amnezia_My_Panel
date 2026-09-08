@@ -1,14 +1,15 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 
 {% block content %}
 <section>
-    <div class="flex items-center justify-between" style="margin-bottom: var(--space-lg);">
+    <div class="flex items-center justify-between gap-md" style="margin-bottom: var(--space-lg);">
         <h1 class="section-title" style="margin-bottom:0;">
-            <span class="icon">🖥</span>
+            <span class="icon">{{ icon('server') }}</span>
             {{ _('nav_servers') }}
         </h1>
         <button class="btn btn-primary" onclick="openModal('addServerModal')">
-            <span>＋</span> {{ _('add_server') }}
+            {{ icon('plus') }} {{ _('add_server') }}
         </button>
     </div>
 
@@ -20,13 +21,13 @@
             data-username="{{ server.username }}" data-auth="{{ 'key' if server.private_key else 'password' }}"
             draggable="true">
             <div class="server-meta">
-                <div class="server-icon">🖥</div>
+                <div class="server-icon">{{ icon('server') }}</div>
                 <div style="min-width: 0; flex: 1;">
                     <div class="server-name">
                         <span class="ping-dot ping-pending" id="ping-{{ server.id }}"
                             title="{{ _('ping_checking') }}"></span>
                         <span>{{ server.name }}</span>
-                        <span class="ping-ms text-muted" id="ping-ms-{{ server.id }}"></span>
+                        <span class="ping-ms" id="ping-ms-{{ server.id }}"></span>
                     </div>
                     <div class="server-host">{{ server.host }}:{{ server.ssh_port }}</div>
                 </div>
@@ -54,12 +55,12 @@
                     {{ _('manage') }}
                 </a>
                 <button class="btn btn-secondary btn-sm btn-icon" onclick="openEditServer(this)"
-                    title="{{ _('edit') }}">
-                    ✏️
+                    title="{{ _('edit') }}" aria-label="{{ _('edit') }}">
+                    {{ icon('pencil') }}
                 </button>
                 <button class="btn btn-danger btn-sm btn-icon" onclick="deleteServer({{ server.id }})"
-                    title="{{ _('delete') }}">
-                    🗑
+                    title="{{ _('delete') }}" aria-label="{{ _('delete') }}">
+                    {{ icon('trash') }}
                 </button>
             </div>
         </div>
@@ -67,13 +68,13 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <div class="empty-icon">🛡</div>
+        <div class="empty-icon">{{ icon('shield') }}</div>
         <div class="empty-title">{{ _('no_servers') }}</div>
         <div class="empty-desc">
             {{ _('add_server_desc') }}
         </div>
         <button class="btn btn-primary" onclick="openModal('addServerModal')">
-            <span>＋</span> {{ _('add_server') }}
+            {{ icon('plus') }} {{ _('add_server') }}
         </button>
     </div>
     {% endif %}
@@ -83,8 +84,8 @@
 <div class="modal-backdrop" id="editServerModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">{{ _('edit_server_title') }}</h2>
-            <button class="modal-close" onclick="closeModal('editServerModal')">×</button>
+            <h2 class="modal-title">{{ icon('pencil') }} {{ _('edit_server_title') }}</h2>
+            <button class="modal-close" onclick="closeModal('editServerModal')">{{ icon('x') }}</button>
         </div>
 
         <form id="editServerForm" onsubmit="return submitEditServer(event)">
@@ -150,8 +151,8 @@
 <div class="modal-backdrop" id="addServerModal">
     <div class="modal">
         <div class="modal-header">
-            <h2 class="modal-title">{{ _('add_server') }}</h2>
-            <button class="modal-close" onclick="closeModal('addServerModal')">×</button>
+            <h2 class="modal-title">{{ icon('plus') }} {{ _('add_server') }}</h2>
+            <button class="modal-close" onclick="closeModal('addServerModal')">{{ icon('x') }}</button>
         </div>
 
         <form id="addServerForm" onsubmit="return addServer(event)">
@@ -449,3 +450,4 @@
     });
 </script>
 {% endblock %}
+

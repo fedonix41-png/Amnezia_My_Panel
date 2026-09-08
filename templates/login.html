@@ -6,96 +6,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ site_settings.title or 'Amnezia Panel' }} — {{ _('login') }}</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preload" href="/static/fonts/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/style.css?v=obsidian-8">
     <script>!function () { var t = localStorage.getItem('theme') || 'dark'; document.documentElement.setAttribute('data-theme', t) }()</script>
-    <style>
-        .login-wrapper {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: var(--space-lg);
-            background: var(--bg);
-        }
-
-        .login-card {
-            width: 100%;
-            max-width: 400px;
-        }
-
-        .login-logo {
-            text-align: center;
-            margin-bottom: var(--space-xl);
-        }
-
-        .login-logo .logo-icon {
-            width: 72px;
-            height: 72px;
-            font-size: 2rem;
-            margin: 0 auto var(--space-md);
-        }
-
-        .login-logo .logo-text {
-            font-size: 1.6rem;
-            font-weight: 700;
-        }
-
-        .login-logo .logo-subtitle {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-
-        .login-error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: #ef4444;
-            padding: var(--space-sm) var(--space-md);
-            border-radius: var(--radius-md);
-            font-size: 0.85rem;
-            margin-bottom: var(--space-md);
-            display: none;
-        }
-
-        .login-error.visible {
-            display: block;
-        }
-
-        .lang-check {
-            color: var(--success);
-            font-weight: 700;
-        }
-
-        [dir="rtl"] .lang-check {
-            margin-right: auto;
-        }
-
-        [dir="ltr"] .lang-check {
-            margin-left: auto;
-        }
-    </style>
 </head>
 
 <body>
-    <button class="theme-toggle" onclick="openModal('langModal')" id="langToggle"
-        style="position:fixed; top:20px; {% if lang == 'fa' %}left:65px;{% else %}right:65px;{% endif %} z-index:10;"
-        title="{{ _('select_lang') }}">
-        {% if lang == 'ru' %}🇷🇺{% elif lang == 'fr' %}🇫🇷{% elif lang == 'zh' %}🇨🇳{% elif lang == 'fa' %}🇮🇷{%
-        else %}🇺🇸{% endif %}
-    </button>
-    <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle"
-        style="position:fixed; top:20px; {% if lang == 'fa' %}left:20px;{% else %}right:20px;{% endif %} z-index:10;"
-        title="{{ _('toggle_theme') }}">🌙</button>
+    {% from "_icons.html" import icon, sprite %}
+    {{ sprite() }}
 
     <div class="login-wrapper">
+        <div style="position: fixed; top: 20px; {% if lang == 'fa' %}left: 20px;{% else %}right: 20px;{% endif %} z-index: 10; display: flex; gap: var(--space-sm);">
+            <button class="theme-toggle" onclick="openModal('langModal')" id="langToggle"
+                title="{{ _('select_lang') }}">
+                <span class="font-mono" style="font-size:0.62rem; font-weight:600;">{{ lang | upper }}</span>
+            </button>
+            <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle"
+                title="{{ _('toggle_theme') }}">{{ icon('moon', 'ic-moon') }}{{ icon('sun', 'ic-sun') }}</button>
+        </div>
+
         <div class="login-card">
             <div class="login-logo">
-                <div class="logo-icon">{{ site_settings.logo or '🛡' }}</div>
+                <div class="logo-icon">
+                    {%- if site_settings.logo %}{{ site_settings.logo }}{% else %}{{ icon('shield') }}{% endif -%}
+                </div>
                 <div class="logo-text">{{ site_settings.title or 'Amnezia Panel' }}</div>
                 <div class="logo-subtitle">{{ site_settings.subtitle or 'Web Panel' }}</div>
             </div>
 
             <div class="card">
-                <h2 style="font-size:1.2rem; font-weight:600; margin-bottom:var(--space-lg); text-align:center;">{{
+                <h2 style="font-family: var(--font-display); font-size:1rem; font-weight:700; margin-bottom:var(--space-lg); text-align:center;">{{
                     _('login_title') }}</h2>
 
                 <div class="login-error" id="loginError"></div>
@@ -115,7 +56,7 @@
                     <div class="form-group">
                         <label class="form-label">{{ _('captcha') }}</label>
                         <div
-                            style="display: flex; margin-bottom: var(--space-xs); border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color);">
+                            style="display: flex; margin-bottom: var(--space-xs); border-radius: var(--radius-sm); overflow: hidden; box-shadow: var(--shadow-inset);">
                             <img id="captchaImage" src="/api/auth/captcha" alt="Captcha"
                                 style="width: 100%; height: 65px; object-fit: cover; object-position: center; cursor: pointer; background: #fff;"
                                 onclick="refreshCaptcha()" title="{{ _('captcha_hint') }}">
@@ -125,7 +66,7 @@
                     </div>
                     {% endif %}
 
-                    <button type="submit" class="btn btn-primary" id="loginBtn"
+                    <button type="submit" class="btn btn-primary btn-lg" id="loginBtn"
                         style="width:100%; margin-top:var(--space-md);">
                         <span id="loginBtnText">{{ _('login') }}</span>
                         <div class="spinner hidden" id="loginSpinner"></div>
@@ -139,24 +80,24 @@
     <div class="modal-backdrop" id="langModal">
         <div class="modal" style="max-width: 320px;">
             <div class="modal-header">
-                <h2 class="modal-title">{{ _('select_lang') }}</h2>
-                <button class="modal-close" onclick="closeModal('langModal')">×</button>
+                <h2 class="modal-title">{{ icon('globe') }} {{ _('select_lang') }}</h2>
+                <button class="modal-close" onclick="closeModal('langModal')">{{ icon('x') }}</button>
             </div>
             <div style="display: flex; flex-direction: column; gap: var(--space-sm);">
                 {% set langs = [
-                ('en', '🇺🇸', 'lang_en'),
-                ('ru', '🇷🇺', 'lang_ru'),
-                ('fr', '🇫🇷', 'lang_fr'),
-                ('zh', '🇨🇳', 'lang_zh'),
-                ('fa', '🇮🇷', 'lang_fa')
+                ('en', 'EN', 'lang_en'),
+                ('ru', 'RU', 'lang_ru'),
+                ('fr', 'FR', 'lang_fr'),
+                ('zh', 'ZH', 'lang_zh'),
+                ('fa', 'FA', 'lang_fa')
                 ] %}
-                {% for l_code, l_flag, l_key in langs %}
+                {% for l_code, l_code_label, l_key in langs %}
                 <a href="/set_lang/{{ l_code }}" class="btn btn-secondary"
                     style="justify-content: flex-start; gap: var(--space-md); padding: var(--space-md);">
-                    <span style="font-size: 1.4rem;">{{ l_flag }}</span>
-                    <span style="font-weight: 500;">{{ _(l_key) }}</span>
+                    <span class="font-mono" style="font-weight:600; font-size:0.72rem; letter-spacing:0.1em;">{{ l_code_label }}</span>
+                    <span style="font-weight: 600;">{{ _(l_key) }}</span>
                     {% if lang == l_code %}
-                    <span class="lang-check">✓</span>
+                    <span class="lang-check">{{ icon('check') }}</span>
                     {% endif %}
                 </a>
                 {% endfor %}
@@ -168,32 +109,20 @@
         window.I18N = {{ translations_json | safe }};
         window._ = function (key) { return window.I18N[key] || key; };
 
+        window.icon = function (name, cls) {
+            return '<svg class="ic' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + name + '"></use></svg>';
+        };
+
         /* Theme toggle */
         (function () {
             const saved = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', saved);
-
-            const updateUI = () => {
-                const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-                document.querySelectorAll('.theme-toggle').forEach(btn => {
-                    if (btn.id === 'themeToggle') {
-                        btn.textContent = isLight ? '☀️' : '🌙';
-                    }
-                });
-            };
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', updateUI);
-            } else {
-                updateUI();
-            }
 
             window.toggleTheme = function () {
                 const current = document.documentElement.getAttribute('data-theme') || 'dark';
                 const next = current === 'dark' ? 'light' : 'dark';
                 document.documentElement.setAttribute('data-theme', next);
                 localStorage.setItem('theme', next);
-                updateUI();
             };
         })();
 
