@@ -3,7 +3,7 @@
 > Self-hosted VPN-панель. Один контейнер управляет серверами по SSH, разворачивая WireGuard/AWG/Xray/SOCKS5/AdGuard/Nginx/DNS/Telegram.
 
 **Паттерн:** Monolithic Service Layer — FastAPI + массивное ядро в `app.py` (~2250 строк) + protocol managers.
-**Стек:** Python 3.12+, FastAPI, SQLAlchemy (async), paramiko, Docker.
+**Стек разработки:** Python, FastAPI, SQLAlchemy (async), paramiko. Локальный запуск: `venv/bin/uvicorn app:app --reload --port 5000`; `docker-compose.dev.yml` нужен только для PostgreSQL.
 
 ## Файлы документации
 
@@ -38,22 +38,22 @@ scripts/            — one-shot миграции (secrets, postgres)
 
 ```python
 BASE_PROTOCOLS = ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'dns',
-                  'wireguard', 'socks5', 'adguard', 'nginx']        # app.py:954
-MULTI_INSTANCE_PROTOCOLS = {'awg','awg2','awg_legacy','xray','telemt','socks5'}  # :955
-API_TOKEN_PREFIX = 'awp_'                                           # :1121
-CURRENT_VERSION = 'v1.5.0'                                          # :192
+                  'wireguard', 'socks5', 'adguard', 'nginx']
+MULTI_INSTANCE_PROTOCOLS = {'awg','awg2','awg_legacy','xray','telemt','socks5'}
+API_TOKEN_PREFIX = 'awp_'
+CURRENT_VERSION = 'v1.5.0'
 ```
 
 ## Циклический импорт (осознанный паттерн)
 
-Роутеры импортируют `app.py` как `import app as app_module` для доступа к `_check_admin`, `get_ssh`, `get_protocol_manager`. `app.py` импортирует роутеры в **конце файла** (строка 2020). `app.py:127` — `sys.modules['app'] = sys.modules[__name__]` для корректной работы при `__main__`.
+Роутеры импортируют `app.py` как `import app as app_module` для доступа к `_check_admin`, `get_ssh`, `get_protocol_manager`. `app.py` импортирует роутеры в секции `ROUTERS REGISTRATION`. Алиас `sys.modules['app'] = sys.modules[__name__]` поддерживает корректный импорт при запуске `app.py` как `__main__`.
 
 ## 3 механизма аутентификации
 
 | Механизм | Триггер | Проверка |
 |---|---|---|
-| Session cookie | HTML + большинство API | `request.session['user_id']` → `get_current_user()` (`:1462`) |
-| Bearer token | `Authorization: Bearer awp_...` | SHA-256 сверка (`_resolve_api_token`, `:1137`) |
+| Session cookie | HTML + большинство API | `request.session['user_id']` → `get_current_user()` |
+| Bearer token | `Authorization: Bearer awp_...` | `_check_admin()` вычисляет SHA-256, ищет `ApiToken`, проверяет owner role/enabled и обновляет `last_used_at` с throttling |
 | Share token | `/share/{token}` | `UserRepository.get_by_share_token()` |
 
 ## ORM-схема (кратко)
@@ -66,3 +66,5 @@ Setting (key:PK, value:JSON)
 
 Каскады: `cascade="all, delete-orphan"` + FK `ondelete="CASCADE"`.
 Fernet-шифрование: `Server.password`, `Server.private_key` (lazy через `@property`).
+
+Bearer-аутентификация не имеет отдельного resolver-а: административные роуты используют `_check_admin()` из `app.py`.

@@ -6,13 +6,13 @@
 
 | Параметр | Значение | Файл |
 |---|---|---|
-| Движок | `create_async_engine` | `database/session.py:16` |
-| Dev | `sqlite+aiosqlite:///app.db` | `config.py:169` |
-| Prod | `postgresql+asyncpg://...` | `config.py:169` |
-| `pool_pre_ping` | `True` | `session.py:18` |
-| asyncpg timeout | 5с | `session.py:10` |
-| `expire_on_commit` | `False` | `session.py:23` |
-| `autoflush` | `False` | `session.py:24` |
+| Движок | `create_async_engine` | `database/session.py` |
+| Dev | `sqlite+aiosqlite:///app.db` | `config.py` |
+| Prod | `postgresql+asyncpg://...` | `config.py` |
+| `pool_pre_ping` | `True` | `database/session.py` |
+| asyncpg timeout | 5с | `database/session.py` |
+| `expire_on_commit` | `False` | `database/session.py` |
+| `autoflush` | `False` | `database/session.py` |
 | Миграции | Alembic async, 3 ревизии | `migrations/versions/` |
 
 **Доступ:**
@@ -45,29 +45,29 @@
 - **Нет retry** — одна попытка, без повторов
 - `allow_agent=False`, `look_for_keys=False`
 
-Конструктор: `get_ssh(server, db)` (`app.py:271`) — принимает dict или ORM `Server`, дешифрует credentials.
+Конструктор: `get_ssh(server, db)` в `app.py` — принимает dict или ORM `Server`, дешифрует credentials.
 
 ## Туннели (Cloudflare / ngrok)
 
-| Компонент | Строка | Описание |
+| Компонент | Расположение | Описание |
 |---|---|---|
-| `TUNNEL_RUNTIMES` | `app.py:226` | `dict[str, TunnelRuntime]` — process, pid, url |
-| `TUNNEL_LOCK` | `app.py:230` | `threading.Lock` — защита мутаций |
-| `start_tunnel()` | `app.py:797` | `subprocess.Popen` + watcher thread |
-| `stop_tunnel()` | `app.py:840` | Kill process + cleanup |
-| `watch_tunnel_output()` | `app.py:766` | Background thread читает stdout |
-| URL parsing | `app.py:231` | Regex `https://[^\s"\']+` |
-| ngrok API | `app.py:746` | `127.0.0.1:4040` для public URL |
+| `TUNNEL_RUNTIMES` | `app.py` | `dict[str, TunnelRuntime]` — process, pid, url |
+| `TUNNEL_LOCK` | `app.py` | `threading.Lock` — защита мутаций |
+| `start_tunnel()` | `app.py` | `subprocess.Popen` + watcher thread |
+| `stop_tunnel()` | `app.py` | Kill process + cleanup |
+| `watch_tunnel_output()` | `app.py` | Background thread читает stdout |
+| URL parsing | `app.py` | Regex `https://[^\s"\']+` |
+| ngrok API | `app.py` | `127.0.0.1:4040` для public URL |
 | State file | `tunnels_state.json` | Persistent tunnel config |
 
 ## WARP (Cloudflare)
 
-| Функция | Строка | Timeout | Описание |
+| Функция | Расположение | Timeout | Описание |
 |---|---|---|---|
-| `run_warp_cli(*args)` | `app.py:350` | 12с | Subprocess wrapper |
-| `enable_warp()` | `app.py:422` | — | Register + connect |
-| `disable_warp()` | `app.py:443` | — | Disconnect |
-| `get_warp_status()` | `app.py:387` | — | Full status dict |
+| `run_warp_cli(*args)` | `app.py` | 12с | Subprocess wrapper |
+| `enable_warp()` | `app.py` | — | Register + connect |
+| `disable_warp()` | `app.py` | — | Disconnect |
+| `get_warp_status()` | `app.py` | — | Full status dict |
 
 ## Фоновые задачи
 
@@ -87,10 +87,10 @@
 
 | Компонент | Описание |
 |---|---|
-| `posthog_client` | Global, `app.py:42`, `atexit` shutdown |
-| Middleware | `PostHogRequestContextMiddleware` (`middleware.py:57`) |
+| `posthog_client` | Global в `app.py`, `atexit` shutdown |
+| Middleware | `PostHogRequestContextMiddleware` в `middleware.py` |
 | Events | `user_logged_in`, через `capture_posthog_event()` |
-| ⚠️ Dev | **Обязателен** (RuntimeError) — инверсия prod-логики! |
+| Режим | Опционален: клиент создаётся только при наличии `POSTHOG_PROJECT_TOKEN` и `POSTHOG_HOST` |
 
 ## Protocol Managers — Docker
 

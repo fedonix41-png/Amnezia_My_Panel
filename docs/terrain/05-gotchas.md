@@ -6,8 +6,8 @@
 
 ⚠️ Всё состояние хранится в БД. Исключения — процессные модульные глобалы, опасные при рефакторинге:
 
-- `TUNNEL_RUNTIMES` (`app.py:226`) — `dict[str, TunnelRuntime]` с `Popen`/PID, мутируется из watcher-потоков. Все мутации под `TUNNEL_LOCK` (`app.py:230`).
-- `_callback_refs` (`telegram_bot.py:90`) и `_pending_inputs` (`telegram_bot.py:91`) — обычные dict без `asyncio.Lock`. Безопасны при одном polling-потоке, но race возможен при добавлении конкурентных обработчиков.
+- `TUNNEL_RUNTIMES` в `app.py` — `dict[str, TunnelRuntime]` с `Popen`/PID, мутируется из watcher-потоков. Все мутации под `TUNNEL_LOCK`.
+- `_callback_refs` и `_pending_inputs` в `telegram_bot.py` — обычные dict без `asyncio.Lock`. Безопасны при одном polling-потоке, но race возможен при добавлении конкурентных обработчиков.
 
 Остальные глобалы (`posthog_client`, `TRANSLATIONS`, `DATA_FILE`) — read-only после startup, для агента не критичны.
 
@@ -17,10 +17,10 @@
 
 | Значение | Где | Почему важно |
 |---|---|---|
-| `600_000` / `100_000` | `app.py:1180` / `repositories.py:20` | PBKDF2 итерации — расходятся, менять согласованно с `verify_password` |
-| `300` (5 мин) | `app.py:1122` `API_TOKEN_TOUCH_INTERVAL` | Троттлинг перезаписи `last_used` |
-| `25` (сек) | `telegram_bot.py:1565` | Long-polling timeout |
-| `15` (сек) | `ssh_manager.py:78` | SSH connect timeout |
+| `600_000` / `100_000` | `app.py` / `database/repositories.py` | PBKDF2 итерации — расходятся, менять согласованно с `verify_password` |
+| `300` (5 мин) | `API_TOKEN_TOUCH_INTERVAL` в `app.py` | Троттлинг перезаписи `last_used` |
+| `25` (сек) | `telegram_bot.py` | Long-polling timeout |
+| `15` (сек) | `managers/ssh_manager.py` | SSH connect timeout |
 
 ## WireGuardManager — исключение в сигнатуре
 
@@ -28,11 +28,11 @@
 
 ## Дублирование `hash_password`
 
-См. [02-core §Криптография](02-core.md). Суть: `app.py:1178` (600k, `iterations$salt$hash`) и `repositories.py:20` (100k, `salt$hash`) расходятся; `verify_password()` читает оба.
+См. [02-core §Криптография](02-core.md). Суть: `hash_password()` в `app.py` (600k, `iterations$salt$hash`) и в `database/repositories.py` (100k, `salt$hash`) расходятся; `verify_password()` читает оба.
 
 ## Connection reconciliation (деструктивный!)
 
-`GET /api/servers/{id}/connections` при `cached=false` (`connections.py:54`):
+`GET /api/servers/{id}/connections` при `cached=false` в `routers/connections.py`:
 1. SSH → получить live clients с remote
 2. **Авто-создаёт** в БД клиентов с remote, отсутствующих локально
 3. **Авто-удаляет** из БД клиентов, отсутствующих на remote
@@ -40,8 +40,8 @@
 
 ## Legacy `data.json`
 
-- `DATA_FILE` (`app.py:187`, env `DATA_FILE`) — путь, который бэкапит `_background_backup`; не источник данных (всё в БД)
-- `_resolve_api_token()` (`app.py:1137`) — legacy dict fallback
+- `DATA_FILE` в `app.py` (env `DATA_FILE`) — путь, который бэкапит `_background_backup`; не источник данных (всё в БД)
+- Bearer-аутентификация выполняется `_check_admin()` в `app.py` по таблице `ApiToken`; не добавляй in-memory fallback.
 - `scripts/migrate_secrets.py`, `scripts/migrate_to_postgres.py` — one-shot миграции
 
 ## Dev vs Production
@@ -53,7 +53,7 @@
 | БД | SQLite (`app.db`) | PostgreSQL (asyncpg) |
 | `SESSION_COOKIE_SECURE` | `False` | `True` |
 | `TrustedHostMiddleware` | Пропущен | Активен |
-| PostHog | **Обязателен** (RuntimeError!) | Опционален |
+| PostHog | Опционален | Опционален |
 | SSH | Синтезируются | Реальные paramiko |
 
 ---
@@ -78,25 +78,25 @@
 ## Priority Reading Order
 
 ### Приоритет 1 — Понять контекст
-1. `config.py` (~170 строк) — env-переменные
-2. `database/models.py` (~115 строк) — схема данных
-3. `app.py:950–1110` — протоколы, фабрика, dispatch
+1. `config.py` — env-переменные
+2. `database/models.py` — схема данных
+3. Секция реестра протоколов в `app.py` — протоколы, фабрика, dispatch
 
 ### Приоритет 2 — Добавить эндпоинт
 4. `routers/connections.py` — эталонный CRUD + SSH + DB + auth
-5. `app.py:1462–1530` — `_check_admin`, `get_current_user`, `tpl()`
-6. `middleware.py` (~137 строк) — CSRF, headers
+5. `app.py` — `_check_admin`, `get_current_user`, `tpl()`
+6. `middleware.py` — CSRF, headers
 
 ### Приоритет 3 — Добавить протокол
-7. `managers/awg_manager.py` — эталонный менеджер (1378 строк)
-8. `managers/ssh_manager.py` (285 строк) — SSH lifecycle
-9. `app.py:1030–1056` — регистрация в `get_protocol_manager()`
-10. `app.py:954–955` — `BASE_PROTOCOLS` / `MULTI_INSTANCE_PROTOCOLS`
+7. `managers/awg_manager.py` — эталонный менеджер
+8. `managers/ssh_manager.py` — SSH lifecycle
+9. `get_protocol_manager()` в `app.py` — регистрация менеджеров
+10. `BASE_PROTOCOLS` / `MULTI_INSTANCE_PROTOCOLS` в `app.py`
 
 ### Приоритет 4 — Telegram-бот
-11. `telegram_bot.py:1550–1660` — polling + dispatch
-12. `telegram_bot.py:250–270` — `_ref()` / `_resolve_ref()`
-13. `telegram_bot.py:414` — SSH из бота
+11. `_run_bot()` и `_dispatch()` в `telegram_bot.py` — polling + dispatch
+12. `_ref()` / `_resolve_ref()` в `telegram_bot.py`
+13. `_get_ssh_and_manager()` в `telegram_bot.py` — SSH из бота
 
 ### Приоритет 5 — БД-схема
 14. `database/repositories.py` — ServerRepository (encrypt on write!)

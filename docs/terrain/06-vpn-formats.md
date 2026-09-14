@@ -40,7 +40,7 @@
 | H1, H2, H3, H4 | Header init values. В 2.0 — **non-overlapping ranges** |
 | I1-I5, CPS | **AWG 1.5** — init packet chain + CPS |
 
-`generate_awg_params(use_ranges=True)` (`awg_manager.py:71`) — для AWG 2.0 генерирует H как непересекающиеся диапазоны.
+`generate_awg_params(use_ranges=True)` в `managers/awg_manager.py` — для AWG 2.0 генерирует H как непересекающиеся диапазоны.
 
 ## vpn:// link format
 
@@ -90,8 +90,8 @@ Reverse-engineered под Amnezia C++ `extractConfigFromQr` decoder:
 
 ## Где используется
 
-- `app.py:1110` → `generate_vpn_link()` — вызывается при add/edit connection
-- `app.py:1114` → `generate_qr_content()` — для QR-кода в UI и Telegram
+- `generate_vpn_link()` из `app.py` — вызывается при add/edit connection
+- `generate_qr_content()` из `app.py` — для QR-кода в UI и Telegram
 - `telegram_bot.py` — config delivery: AWG/WG → `vpn://`, Xray/Telemt → raw link
 - `routers/connections.py` — возвращает `vpn_link` и `qr_content` в API response
 

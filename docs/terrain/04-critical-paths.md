@@ -6,7 +6,7 @@
 
 ```
 POST /api/servers/{server_id}/install
-  ↓ routers/protocols.py:69
+  ↓ `routers/protocols.py` → endpoint install
   ↓ _check_admin(db, request)           → проверка роли (session/bearer)
   ↓ protocol_base(req.protocol)          → 'awg__2' → 'awg'
   ↓ next_protocol_key(existing, base)    → находит свободный instance#
@@ -29,7 +29,7 @@ POST /api/servers/{server_id}/install
 
 ```
 POST /api/servers/{server_id}/connections/add
-  ↓ routers/connections.py:139
+  ↓ `routers/connections.py` → endpoint add connection
   ↓ _check_admin → get_ssh → ssh.connect()
   ↓ get_protocol_manager(ssh, protocol)
   ↓ Dispatch по protocol_base:
@@ -48,7 +48,7 @@ POST /api/servers/{server_id}/connections/add
 
 ```
 Callback: r:<ref_key> → _resolve_ref() → action='do_install_proto'
-  ↓ telegram_bot.py:1141  _admin_do_install_protocol()
+  ↓ `telegram_bot.py` → `_admin_do_install_protocol()`
   ↓ async with get_db_context() as db    ← fresh session per update!
   ↓ ServerRepository.get_by_id(db, server_id)
   ↓ asyncio.to_thread(get_ssh_and_manager, ...)
@@ -66,18 +66,18 @@ Callback: r:<ref_key> → _resolve_ref() → action='do_install_proto'
 
 ```
 GET /share/{token}
-  ↓ routers/sharing.py:49
+  ↓ `routers/sharing.py` → endpoint share page
   ↓ UserRepository.get_by_share_token(db, token)
   ↓ Проверка: share_enabled=True
   ↓ Рендеринг user_share.html
 
 POST /api/share/{token}/auth
-  ↓ routers/sharing.py:76
+  ↓ `routers/sharing.py` → endpoint share authentication
   ↓ verify_password(req.password, user.share_password_hash)
   ↓ session['share_user_id'] = user.id
 
 GET /api/share/{token}/connections
-  ↓ routers/sharing.py:94
+  ↓ `routers/sharing.py` → endpoint list connections
   ↓ select(Connection).where(user_id=share_user.id)
   ↓ Только подключения владельца
 ```
@@ -89,7 +89,7 @@ config.py  ← (load_dotenv)
     ↑
     ├── middleware.py
     │       ↑
-    │       └── app.py  (~2250 строк, главный модуль)
+    │       └── app.py  (главный модуль)
     │               ├── top-level imports:
     │               │     ├── managers/{ssh,awg,xray,wireguard,backup}_manager
     │               │     ├── managers/{secrets,amnezia_config}
@@ -98,9 +98,9 @@ config.py  ← (load_dotenv)
     │               ├── deferred (в get_protocol_manager):
     │               │     └── managers/{telemt,dns,socks5,adguard,nginx}_manager
     │               │
-    │               ├── database/{session,models,crud}   (строка 259)
+    │               ├── database/{session,models,crud}
     │               │
-    │               └── routers/* (9 модулей)            (строка 2020)
+    │               └── routers/* (9 модулей)
     │                     └── каждый: import app as app_module
     │
     ├── database/session.py
@@ -120,5 +120,5 @@ config.py  ← (load_dotenv)
 
 ### Циклический импорт (осознанный)
 
-`app.py:127` — `sys.modules['app'] = sys.modules[__name__]`
-Роутеры импортируют `app` в начале файла, `app` импортирует роутеры в конце (строка 2020).
+Алиас `sys.modules['app'] = sys.modules[__name__]` в `app.py` обеспечивает корректный импорт при запуске как `__main__`.
+Роутеры импортируют `app` в начале файла, а `app` импортирует роутеры в секции `ROUTERS REGISTRATION`.

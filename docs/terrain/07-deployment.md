@@ -2,6 +2,8 @@
 
 > Связан: [INDEX](INDEX.md) | [03-infra](03-infrastructure.md)
 
+> Статус: Dockerfile и production compose пока унаследованы от форка и не входят в текущий dev workflow. Проект запускается локально через `venv/bin/uvicorn app:app --reload --port 5000`; `docker-compose.dev.yml` используется только для базы данных. Этот документ — задел для будущего deployment work, а не инструкция для текущей разработки.
+
 ## Docker Compose (production)
 
 **Image:** `prvtpro/amnezia-panel:latest`

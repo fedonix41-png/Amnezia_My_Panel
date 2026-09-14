@@ -94,7 +94,7 @@ finally:
 
 ### Реестр протоколов
 
-Новые протоколы регистрируются в `BASE_PROTOCOLS` и `MULTI_INSTANCE_PROTOCOLS` (`app.py:954-955`). Полный список, семантика multi-instance и точки интеграции — в [02-core.md](docs/terrain/02-core.md).
+Новые протоколы регистрируются в `BASE_PROTOCOLS` и `MULTI_INSTANCE_PROTOCOLS` в `app.py`. Полный список, семантика multi-instance и точки интеграции — в [02-core.md](docs/terrain/02-core.md).
 
 ## Безопасность (критично)
 
@@ -168,12 +168,12 @@ class TestSomething:
 ## Legacy и миграции
 
 - `data.json` — **не источник данных**, всё хранится в БД. Но `DATA_FILE` (env-оверрайд, по умолч. `data.json`) по-прежнему используется как **цель бэкапов** в `_background_backup()`. Не удаляй `_background_backup` и не меняй `DATA_FILE` без понимания этого.
-- `_maybe_migrate_legacy_data_file()` (`app.py:197`) — one-time перенос legacy-пути `data.json` при первом запуске после миграции.
-- `_resolve_api_token()` (`app.py:1137`) — **мёртвый код** (работает со словарём в памяти). Реальная bearer-аутентификация читает таблицу `ApiToken` из БД напрямую (`get_current_user`, `app.py:1493-1502`).
+- `_maybe_migrate_legacy_data_file()` в `app.py` — one-time перенос legacy-пути `data.json` при первом запуске после миграции.
+- Bearer-аутентификация реализована в `_check_admin()` в `app.py`: она читает таблицу `ApiToken` из БД, а не использует состояние в памяти.
 
 ## Навигация по большим файлам
 
-`app.py` (~2250 строк) и `telegram_bot.py` (~1720 строк) — используй grep по сигнатурам:
+`app.py` и `telegram_bot.py` — используй grep по сигнатурам, а не номера строк:
 ```bash
 grep -n "def \|async def \|class " app.py
 grep -n "BASE_PROTOCOLS\|_check_admin\|_manager_call\|get_protocol_manager" app.py
