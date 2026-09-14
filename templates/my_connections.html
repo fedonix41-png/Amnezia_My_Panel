@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 
+{% set conn_badges = {
+    'awg': 'badge-success',
+    'awg2': 'badge-accent',
+    'awg_legacy': 'badge-accent',
+    'xray': 'badge-info',
+    'socks5': 'badge-warn',
+    'dns': 'badge-info',
+    'adguard': 'badge-info'
+} %}
+
 {% block title_extra %} — {{ _('my_connections_title') }}{% endblock %}
 
 {% block content %}
@@ -20,7 +30,7 @@
                     <div class="client-name">{{ c.name or 'VPN Connection' }}</div>
                     <div class="client-meta">
                         <span>{{ icon('server') }} {{ c.server_name }}</span>
-                        <span class="badge badge-info" style="font-size:0.65rem;">
+                        <span class="badge {{ conn_badges.get(c.protocol, 'badge-info') }}" style="font-size:0.65rem;">
                             {{ 'AmneziaWG' if c.protocol == 'awg' else ('AmneziaWG 2.0' if c.protocol == 'awg2' else ('AWG Legacy' if c.protocol == 'awg_legacy' else
                             ('Xray' if c.protocol == 'xray' else c.protocol | upper))) }}
                         </span>

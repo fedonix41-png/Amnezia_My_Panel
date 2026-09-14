@@ -59,7 +59,16 @@ async def index(request: Request, db: AsyncSession = Depends(get_db)):
         s_dict['protocols'] = {p.protocol_type: p.to_dict() for p in s.protocols}
         servers.append(s_dict)
     
-    return await app_module.tpl(db, request, 'index.html', servers=servers)
+    stats_users = await db.scalar(select(func.count()).select_from(models.User))
+    stats_connections = await db.scalar(select(func.count()).select_from(models.UserConnection))
+    traffic_sum = await db.scalar(select(func.coalesce(func.sum(models.User.traffic_total), 0))) or 0
+
+    return await app_module.tpl(
+        db, request, 'index.html', servers=servers,
+        stats_users=stats_users,
+        stats_connections=stats_connections,
+        stats_traffic=f"{traffic_sum / 1024**3:.2f}",
+    )
 
 
 @router.get('/server/{server_id}', response_class=HTMLResponse)
