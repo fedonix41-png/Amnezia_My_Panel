@@ -17,6 +17,7 @@ from app import (
     _generate_api_token,
     _maybe_migrate_legacy_data_file,
     _touch_api_token,
+    build_tunnel_command,
     generate_vpn_link,
     hash_password,
     verify_password,
@@ -128,6 +129,36 @@ class TestTokenTouchThrottle:
         assert _touch_api_token(entry) is True
         # New value is a valid ISO timestamp.
         datetime.fromisoformat(entry["last_used_at"])
+
+
+class TestTunnelCommand:
+    def test_cloudflare_rewrites_host_header_to_trusted_origin(self):
+        command = build_tunnel_command(
+            "cloudflare", "/opt/cloudflared", "http://127.0.0.1:5000"
+        )
+
+        assert command == [
+            "/opt/cloudflared",
+            "tunnel",
+            "--url",
+            "http://127.0.0.1:5000",
+            "--http-host-header",
+            "127.0.0.1",
+            "--no-autoupdate",
+        ]
+
+    def test_cloudflare_uses_hostname_from_origin_url(self):
+        command = build_tunnel_command(
+            "cloudflare", "cloudflared", "https://localhost:5443"
+        )
+
+        header_index = command.index("--http-host-header")
+        assert command[header_index + 1] == "localhost"
+
+    def test_ngrok_command_is_unchanged(self):
+        assert build_tunnel_command(
+            "ngrok", "ngrok", "http://127.0.0.1:5000", "token"
+        ) == ["ngrok", "http", "http://127.0.0.1:5000", "--log=stdout"]
 
 
 class TestLegacyDataFileMigration:

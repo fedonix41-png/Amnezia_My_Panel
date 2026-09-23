@@ -31,7 +31,14 @@ async def db_setup():
 def app_client(db_setup):
     import app as _app
     from fastapi.testclient import TestClient
-    with TestClient(_app.app, raise_server_exceptions=False) as c:
-        yield c
 
+    # The database fixture already performs the startup work required by
+    # request tests.  Do not enter TestClient as a context manager here:
+    # that would run the production lifespan for every test, including
+    # background traffic/backup jobs and host tunnel shutdown.
+    client = TestClient(_app.app, raise_server_exceptions=False)
+    try:
+        yield client
+    finally:
+        client.close()
 

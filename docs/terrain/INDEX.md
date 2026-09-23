@@ -2,8 +2,10 @@
 
 > Self-hosted VPN-панель. Один контейнер управляет серверами по SSH, разворачивая WireGuard/AWG/Xray/SOCKS5/AdGuard/Nginx/DNS/Telegram.
 
-**Паттерн:** Monolithic Service Layer — FastAPI + массивное ядро в `app.py` (~2250 строк) + protocol managers.
+**Паттерн:** Monolithic Service Layer — FastAPI + крупное ядро в `app.py` + protocol managers.
 **Стек разработки:** Python, FastAPI, SQLAlchemy (async), paramiko. Локальный запуск: `venv/bin/uvicorn app:app --reload --port 5000`; `docker-compose.dev.yml` нужен только для PostgreSQL.
+
+Это тематический указатель, а не обязательный pre-read. Перед правкой читай только связанные с задачей разделы и проверяй их по живому коду.
 
 ## Файлы документации
 
@@ -26,9 +28,9 @@ middleware.py       — CSRF, SecurityHeaders, PostHog middleware
 telegram_bot.py     — Telegram-бот (raw httpx, long-polling)
 routers/            — 9 FastAPI-роутеров (auth, servers, protocols, connections,
                       users, sharing, settings, templates, api_tokens)
-managers/           — 10 protocol managers + ssh_manager + secrets + amnezia_config
+managers/           — protocol/infrastructure managers + secrets + amnezia_config
 database/           — models.py, session.py, crud.py, repositories.py
-templates/          — 8 Jinja2 HTML-шаблонов
+templates/          — 9 Jinja2 HTML-шаблонов с frontend JavaScript
 translations/       — i18n (en, ru, fa, fr, zh)
 tests/              — pytest + FastAPI TestClient
 scripts/            — one-shot миграции (secrets, postgres)

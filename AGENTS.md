@@ -2,192 +2,105 @@
 
 ## Окружение
 
-- Весь Python только через `venv/`: `venv/bin/python`, `venv/bin/pip`, `venv/bin/pytest`
-- Не использовать `sudo` на хосте
-- Проверка синтаксиса: `venv/bin/python -m py_compile <file>`
-- Тесты: `venv/bin/python -m pytest`
+- Весь Python запускать только через `venv/`: `venv/bin/python`, `venv/bin/pip`, `venv/bin/pytest`.
+- Не использовать `sudo` на хосте.
+- Проверка синтаксиса: `venv/bin/python -m py_compile <file>`.
+- Тесты: `venv/bin/python -m pytest` или точечно `venv/bin/python -m pytest <test> -q`.
+- Тесты используют in-memory SQLite и моки SSH; они не имеют доступа к production-серверам.
 
 ## Что это за проект
 
-Self-hosted панель управления VPN-серверами. Один Docker-контейнер управляет множеством удалённых серверов по SSH, разворачивая WireGuard, AmneziaWG, Xray, SOCKS5, AdGuard Home, Nginx, DNS и Telegram-бота.
+Self-hosted FastAPI-панель управляет удалёнными VPN-серверами по SSH. Она разворачивает WireGuard, AmneziaWG, Xray, SOCKS5, AdGuard Home, Nginx, DNS и Telemt, а также включает Telegram-бота.
 
-**Стек:** Python 3.12+, FastAPI, SQLAlchemy (async), paramiko, Docker Compose.
-**Dev-режим:** `AWP_DEV=1` — SQLite, синтез ключей, отключение TrustedHost.
-**Production:** PostgreSQL (asyncpg), Fernet-шифрование секретов, обязательные `SECRET_KEY` и `MASTER_KEY`.
+**Стек:** Python 3.12+, FastAPI, async SQLAlchemy, paramiko, Docker Compose.
 
-## Структура проекта
+- Dev: `AWP_DEV=1`, SQLite, эфемерные ключи, TrustedHost отключён.
+- Production: PostgreSQL/asyncpg, Fernet-шифрование, обязательные `SECRET_KEY` и `MASTER_KEY`.
 
-```
-app.py              — точка входа, FastAPI app, роутинг протоколов, туннели, утилиты (~2250 строк)
-telegram_bot.py     — Telegram-бот (~1720 строк)
-config.py           — все настройки из env/.env, валидация ключей при старте
-middleware.py        — PostHog, CSRF, SecurityHeaders (SlowAPI — внешняя либа slowapi)
-managers/           — protocol managers (duck-typing, без базового класса)
-  ssh_manager.py    — paramiko-обёртка, ЕДИНСТВЕННЫЙ модуль, открывающий SSH-сокеты
-  secrets.py        — Fernet-шифрование секретов серверов (формат v1:<token>)
-  wireguard_manager.py, awg_manager.py, xray_manager.py, socks5_manager.py,
-  adguard_manager.py, nginx_manager.py, dns_manager.py, telemt_manager.py,
-  backup_manager.py
-routers/            — FastAPI роутеры (auth, servers, protocols, connections,
-                      users, sharing, settings, templates, api_tokens)
-database/
-  models.py         — ORM: User, Server, ServerProtocol, UserConnection, ApiToken, Setting
-  session.py        — get_db (FastAPI dependency), get_db_context (context manager)
-  repositories.py   — высокоуровневые операции (ServerRepository, UserRepository)
-  crud.py           — CRUD для таблицы settings (key-value JSON)
-templates/          — Jinja2 HTML-шаблоны
-static/             — CSS, JS
-tests/              — pytest + FastAPI TestClient, in-memory SQLite
-docs/terrain/INDEX.md — **Карта местности**: SSOT для middleware, протоколов, SSH, безопасности. Начинай навигацию отсюда
-```
+## Как собирать контекст
 
-## Ключевые паттерны
+Не читай всю кодовую базу перед каждой правкой. До редактирования проследи затрагиваемый поток:
 
-### Роутер (эндпоинт)
+1. endpoint, callback или background entry point;
+2. вызываемые helpers и manager methods;
+3. ORM-модели, repositories и точки `commit`;
+4. потребители API в templates/JavaScript и Telegram-боте;
+5. существующие тесты и непокрытые ветки.
 
-Роутеры импортируют `app.py` как `app_module` для доступа к общим функциям (`_check_admin`, `_manager_call` и т.д.). Это обход циклических импортов — не меняй этот паттерн.
+Для сложной межслойной правки сначала кратко зафиксируй инварианты и минимальный набор файлов. Не выводи контракт только из одного manager или router.
 
-```python
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from database.session import get_db
-import app as app_module
+## Карта кода
 
-router = APIRouter(tags=["Example"])
+- `app.py` — FastAPI app, auth helpers, protocol registry/factory, tunnels, background jobs, lifespan.
+- `routers/` — HTTP API и HTML entry points.
+- `managers/` — SSH и реализации протоколов.
+- `database/` — ORM, sessions, repositories, settings CRUD.
+- `telegram_bot.py` — in-process long-polling без `python-telegram-bot`.
+- `templates/` — Jinja2 и значительная часть frontend JavaScript.
+- `static/` — CSS и статические assets.
+- `tests/` — pytest, FastAPI TestClient, in-memory SQLite, SSH mocks.
+- `docs/terrain/INDEX.md` — тематический указатель; читай только разделы, связанные с задачей.
 
-@router.post("/api/example/action")
-async def example_action(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-):
-    user = await app_module._check_admin(db, request)
-    if not user:
-        return JSONResponse({"error": "Forbidden"}, status_code=403)
-    # ... бизнес-логика ...
-    return JSONResponse({"status": "ok"})
-```
+## Ключевые контракты
 
-### Вызов protocol manager
+### Routers
 
-`WireGuardManager` — исключение: его методы НЕ принимают `protocol_type` первым аргументом. `_manager_call` скрывает это различие:
+- Новые endpoints размещать в `routers/`, а не в `app.py`.
+- Роутеры импортируют `app as app_module` для общих helpers. Это осознанный обход циклических импортов.
+- DB session в endpoint: `db: AsyncSession = Depends(get_db)`.
+- Реэкспорт из `app.py` нужен только если есть существующий импорт, test patch target или вызов через `app`.
 
-```python
-ssh = SSHManager(host, port, username, password, private_key)
-ssh.connect()
-try:
-    app_module.ensure_docker_installed(ssh)
-    manager = app_module.get_protocol_manager(ssh, protocol)
-    result = await app_module._manager_call(
-        manager, "install", protocol, *args, **kwargs
-    )
-finally:
-    ssh.disconnect()
-```
+### Protocol managers
 
-### Работа с БД
+Единого Python-интерфейса нет. Сигнатуры исторически различаются, поэтому перед вызовом или изменением проверь реальную сигнатуру и существующие call sites.
 
-- В роутах: `db: AsyncSession = Depends(get_db)` — сессия живёт в рамках запроса
-- Вне роутов (фоновые задачи, бот): `async with get_db_context() as session:`
-- Коммит всегда явный: `await db.commit()`
-- `expire_on_commit=False`, `autoflush=False` — объекты остаются валидными после коммита
+- `get_protocol_manager(ssh, protocol)` учитывает multi-instance key.
+- `_manager_call(manager, method, protocol, ...)` пропускает `protocol` только для `WireGuardManager`; он не унифицирует все остальные различия.
+- Install/uninstall вызывают `install_protocol`/`remove_container` по веткам в `routers/protocols.py`; не заменяй эти ветки общим вызовом без проверки всех managers.
+- `WireGuardManager` обычно не принимает `protocol_type`.
+- Xray получает protocol key в конструкторе, но часть client methods также принимает protocol.
+- Новый протокол потребует проверки registry, factory, names/container names, API, traffic sync, Telegram, config/QR и tests.
 
-### Реестр протоколов
+### Database
 
-Новые протоколы регистрируются в `BASE_PROTOCOLS` и `MULTI_INSTANCE_PROTOCOLS` в `app.py`. Полный список, семантика multi-instance и точки интеграции — в [02-core.md](docs/terrain/02-core.md).
+- В роутах — request-scoped `AsyncSession`; вне роутов — `async with get_db_context()`.
+- Коммит явный: `await db.commit()`.
+- `expire_on_commit=False`, `autoflush=False`.
+- Соблюдай текущий стиль слоя: в проекте есть и repositories, и прямые async SQLAlchemy queries в routers.
+- `data.json` — legacy backup target, а не источник состояния.
 
-## Безопасность (критично)
+### SSH и секреты
 
-### SSH-пароли
+- Только `managers/ssh_manager.py` открывает SSH-сокеты; managers получают `SSHManager` через конструктор.
+- Sudo password передаётся через stdin в `run_sudo_command()`/`run_sudo_script()`, никогда через command line.
+- Пользовательские домены, email, имена и пути валидируются до shell interpolation; пути квотируются `shlex.quote()`.
+- Server credentials — Fernet `v1:<token>` через `managers/secrets.py`.
+- API tokens — `awp_...`, в БД только SHA-256 digest.
+- Host keys защищены TOFU pinning в `_PinningHostKeyPolicy`.
 
-Передаются через paramiko stdin-канал. **НИКОГДА** не используй:
-```bash
-# ❌ Утекает в /proc/<pid>/cmdline
-echo 'password' | sudo -S command
-```
-Правильно — через `SSHManager.run_sudo_command()`, который передаёт пароль через stdin.
+## Безопасные границы
 
-### Валидация пользовательского ввода
-
-Все строки от пользователя (домены, email, имена) валидируются ДО интерполяции в shell:
-- `nginx_manager._validate_domain()` / `_validate_email()`
-- Пути: `shlex.quote()`
-
-### Секреты
-
-- Пароли/ключи серверов шифруются Fernet: `encrypt_secret()` / `decrypt_secret()` из `managers/secrets.py`
-- API-токены: формат `awp_<32 chars>`, хранятся как SHA-256 хэш, никогда в открытом виде
-- Host key pinning: `_PinningHostKeyPolicy` — отпечаток пиннится после первого успешного handshake
-
-### Middleware (порядок важен)
-
-Внешний → внутренний: `TrustedHost → SecurityHeaders → SlowAPI → CSRF → Session → PostHog`
-
-- CSRF: double-submit cookie, Bearer-запросы exempt
-- `TrustedHost`: только в production (пропускается при `AWP_DEV=1`)
-
-## Чего НЕ делать
-
-- **Не добавляй глобальное состояние** (глобальные dict/list для хранения данных) — всё состояние в БД. Исключение: существующие процессные глобалы (`TUNNEL_RUNTIMES`, `_callback_refs`, `_pending_inputs`) — см. [05-gotchas](docs/terrain/05-gotchas.md).
-- **Не используй синхронный DB-доступ** вне `run_in_executor` — проект полностью async
-- **Не создавай файлы в корне проекта** — роутеры в `routers/`, менеджеры в `managers/`
-- **Не ломай `import app as app_module`** — это осознанный обход циклических импортов
-- **Не добавляй `try/except` без логирования** — ошибки не должны теряться молча
-- **Не храни данные в `data.json`** — всё в БД через SQLAlchemy (`data.json` используется только как цель бэкапов)
+- Не добавляй новое process-global state. Существующие исключения: `TUNNEL_RUNTIMES`, `_callback_refs`, `_pending_inputs`.
+- Не ломай `import app as app_module` без отдельного плана декомпозиции.
+- Не создавай feature-файлы в корне: endpoints идут в `routers/`, protocol logic в `managers/`, общие services — в текущий подходящий package.
+- Не добавляй `try/except` без логирования, если ошибка не является ожидаемой и безопасно игнорируемой.
+- Не открывай реальные SSH-сокеты в тестах.
 
 ## Тесты
 
-**Запуск:** `venv/bin/python -m pytest` (или `venv/bin/python -m pytest tests/test_auth.py -v`)
+- HTTP tests: `app_client`; CSRF cookie получается через `GET /login`.
+- Bearer requests освобождены от CSRF.
+- Мокай `SSHManager`, `get_ssh` и protocol managers на границе router↔remote host.
+- Для изменения endpoint проверь success path, permission/error path и DB side effects.
+- Сначала запускай целевые тесты; полный suite — после их успеха.
 
-**Инфраструктура:**
-- `conftest.py` — in-memory SQLite, автосоздание схем, дефолтный admin-пользователь
-- `app_client` fixture — `FastAPI TestClient` с `raise_server_exceptions=False`
-- CSRF: перед POST-запросом сделай GET для получения `csrf_token` cookie
+## Документация по задаче
 
-**Паттерн теста:**
-```python
-class TestSomething:
-    def test_action_success(self, app_client):
-        c = app_client
-        c.get("/login")  # получить csrf cookie
-        csrf = c.cookies.get("csrf_token", "")
+- API/auth/middleware: `docs/terrain/01-entry-points.md`.
+- Protocol registry, manager factory, crypto, config formats: `02-core.md` и `06-vpn-formats.md`.
+- DB, SSH, tunnels, background jobs: `03-infrastructure.md`.
+- Cross-layer flows: `04-critical-paths.md`.
+- Опасные legacy-контракты: `05-gotchas.md`.
+- Deployment и расширение протоколов: `07-deployment.md`.
 
-        r = c.post(
-            "/api/something/action",
-            json={"key": "value"},
-            headers={"X-CSRF-Token": csrf},
-        )
-        assert r.status_code == 200
-        assert r.json()["status"] == "ok"
-```
-
-**Для тестов без CSRF** (API-токены): используй `Authorization: Bearer awp_...` — bearer-запросы обходят CSRF.
-
-**Менеджеры:** тесты в `tests/managers/`. SSH-соединения мокаются, не открывай реальные сокеты в тестах.
-
-## Legacy и миграции
-
-- `data.json` — **не источник данных**, всё хранится в БД. Но `DATA_FILE` (env-оверрайд, по умолч. `data.json`) по-прежнему используется как **цель бэкапов** в `_background_backup()`. Не удаляй `_background_backup` и не меняй `DATA_FILE` без понимания этого.
-- `_maybe_migrate_legacy_data_file()` в `app.py` — one-time перенос legacy-пути `data.json` при первом запуске после миграции.
-- Bearer-аутентификация реализована в `_check_admin()` в `app.py`: она читает таблицу `ApiToken` из БД, а не использует состояние в памяти.
-
-## Навигация по большим файлам
-
-`app.py` и `telegram_bot.py` — используй grep по сигнатурам, а не номера строк:
-```bash
-grep -n "def \|async def \|class " app.py
-grep -n "BASE_PROTOCOLS\|_check_admin\|_manager_call\|get_protocol_manager" app.py
-```
-
-## Документация
-
-- Этот файл (`AGENTS.md`) — быстрый старт
-- `docs/terrain/INDEX.md` — **Карта местности**: навигация по кодовой базе, cross-refs к тематическим файлам. Начинай отсюда
-  - `01-entry-points.md` — эндпоинты, middleware, auth
-  - `02-core.md` — протоколы, фабрика менеджеров, крипто
-  - `03-infrastructure.md` — БД, SSH, Docker, туннели
-  - `04-critical-paths.md` — data flows, граф зависимостей
-  - `05-gotchas.md` — подводные камни, глоссарий, priority reading
-  - `06-vpn-formats.md` — vpn://, QR binary, AWG obfuscation, native JSON
-  - `07-deployment.md` — Docker hardening, SSL, WARP, protocol extension, smoke test
-- Если изменение меняет поведение, сигнатуры или структуру — обнови соответствующий документ
+Если правка меняет поведение, сигнатуру или структуру, обнови только связанные terrain-разделы. В документации ссылайся на имена символов, а не на номера строк.

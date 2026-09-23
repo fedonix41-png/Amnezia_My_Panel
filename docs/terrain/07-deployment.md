@@ -70,9 +70,9 @@ WARP Docker Compose:
 
 Новый VPN-протокол подключается через duck-typed интерфейс (без базового класса). Точки интеграции:
 
-- **Менеджер** в `managers/<name>_manager.py` — реализует методы, которые дёргает `_manager_call()` (см. [02-core](02-core.md) и `managers/awg_manager.py` как эталон): `check_docker_installed`, `check_protocol_installed`, `check_container_running`, `install_protocol`, `remove_container`, `get_clients`, `add_client`, `remove_client`, `toggle_client`, `get_client_config`, `get_server_status`, `save_server_config`. Исключение — `WireGuardManager`, чьи методы не принимают `protocol_type` первым аргументом.
-- **Реестр** в `app.py`: `BASE_PROTOCOLS` (`:954`), при multi-instance — `MULTI_INSTANCE_PROTOCOLS` (`:955`), ветка в `get_protocol_manager()` (`:1030`).
-- **Имена/названия**: `protocol_container_name()` (`:1005`) и `protocol_display_name()` (`:986`).
+- **Менеджер** в `managers/<name>_manager.py` — реализует требуемые call sites methods: `check_*`, `install_protocol`, `remove_container`, client/config/status methods. Единого формального interface нет; нужно задать сигнатуры и добавить contract tests. `AWGManager` полезен как multi-instance reference, но не как универсальный шаблон сигнатур.
+- **Реестр** в `app.py`: `BASE_PROTOCOLS`, при multi-instance — `MULTI_INSTANCE_PROTOCOLS`, ветка в `get_protocol_manager()`.
+- **Имена/названия**: `protocol_container_name()` и `protocol_display_name()`.
 - **Конфиг** в `amnezia_config.py` — если протокол отдаёт конфиг Amnezia-клиенту.
 - **Трафик**: если протокол учитывает трафик, добавить его в список `_scrape_server_traffic()` (см. [03-infra](03-infrastructure.md)).
 - **Telegram**: callback-обработчики в `telegram_bot.py`.

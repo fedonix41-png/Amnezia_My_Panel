@@ -207,11 +207,11 @@ async def save_settings(request: Request, payload: SaveSettingsRequest, db: Asyn
         db.add(settings_obj)
         
     settings_dict = settings_obj.value
-    settings_dict['appearance'] = payload.appearance.dict()
-    settings_dict['sync'] = payload.sync.dict()
-    settings_dict['captcha'] = payload.captcha.dict()
-    settings_dict['telegram'] = payload.telegram.dict()
-    settings_dict['ssl'] = payload.ssl.dict()
+    settings_dict['appearance'] = payload.appearance.model_dump()
+    settings_dict['sync'] = payload.sync.model_dump()
+    settings_dict['captcha'] = payload.captcha.model_dump()
+    settings_dict['telegram'] = payload.telegram.model_dump()
+    settings_dict['ssl'] = payload.ssl.model_dump()
     
     flag_modified(settings_obj, "value")
     await db.commit()

@@ -60,6 +60,8 @@
 | ngrok API | `app.py` | `127.0.0.1:4040` для public URL |
 | State file | `tunnels_state.json` | Persistent tunnel config |
 
+`build_tunnel_command()` для Cloudflare Quick Tunnel передаёт `--http-host-header` с hostname локального origin URL. Это не пропускает случайный `*.trycloudflare.com` в `TrustedHostMiddleware` и не требует ослаблять production-список `TRUSTED_HOSTS`.
+
 ## WARP (Cloudflare)
 
 | Функция | Расположение | Timeout | Описание |
@@ -73,8 +75,8 @@
 
 | Задача | Цикл | Что делает |
 |---|---|---|
-| `_bg_traffic` (`periodic_background_tasks`, `:1911`) | `sleep(60)` → работа → `sleep(600)` | Трафик-синк, лимиты, expiration, Remnawave sync |
-| `_bg_backup` (`_background_backup`, `:1877`) | `BACKUP_INTERVAL_HOURS` (по умолч. 6ч); `0` — отключено | Копия `DATA_FILE` с timestamps, pruning по `BACKUP_KEEP_COUNT` |
+| `_bg_traffic` (`periodic_background_tasks`) | `sleep(60)` → работа → `sleep(600)` | Трафик-синк, лимиты, expiration, Remnawave sync |
+| `_bg_backup` (`_background_backup`) | `BACKUP_INTERVAL_HOURS` (по умолч. 6ч); `0` — отключено | Копия `DATA_FILE` с timestamps, pruning по `BACKUP_KEEP_COUNT` |
 
 `periodic_background_tasks` также:
 - `_scrape_server_traffic()` — **не** `wg show all`: перебирает протоколы `['awg','awg2','awg_legacy','xray','telemt','wireguard']`, для каждого вызывает `get_clients` и агрегирует `dataReceivedBytes` + `dataSentBytes`. Добавление нового протокола требует обновления этого списка.

@@ -14,11 +14,11 @@ POST /api/servers/{server_id}/install
   ↓ ssh.connect()                       → paramiko handshake + pin fingerprint
   ↓ ensure_docker_installed(ssh)         → apt install docker on remote
   ↓ get_protocol_manager(ssh, protocol)  → deferred import + factory
-  ↓ _manager_call(manager, 'install', protocol, ...)
-  │   WireGuard: manager.install(port)        ← БЕЗ protocol_type!
-  │   AWG:       manager.install('awg', port, params)
-  │   Xray:      manager.install(port, site_name)
-  │   Telemt:    manager.install('telemt', port, tls, domain)
+  ↓ dispatch в `routers/protocols.py` по protocol_base
+  │   WireGuard: manager.install_protocol(port=port)       ← БЕЗ protocol_type!
+  │   AWG:       manager.install_protocol(protocol, port=port)
+  │   Xray:      manager.install_protocol(port=port)
+  │   Telemt:    manager.install_protocol(protocol_type=protocol, port=port, ...)
   ↓   → SSH: docker build/run, iptables, конфиги
   ↓ db.add(ServerProtocol(...))
   ↓ db.commit()
@@ -33,7 +33,7 @@ POST /api/servers/{server_id}/connections/add
   ↓ _check_admin → get_ssh → ssh.connect()
   ↓ get_protocol_manager(ssh, protocol)
   ↓ Dispatch по protocol_base:
-  │   telemt    → manager.add_client(name, host, port, **kwargs)
+  │   telemt    → manager.add_client(protocol, name, host, port, **kwargs)
   │   wireguard → manager.add_client(name, host)     ← БЕЗ protocol_type!
   │   awg       → manager.add_client('awg', name, host, port)
   │   xray      → manager.add_client('xray', name, host, port)
@@ -54,7 +54,7 @@ Callback: r:<ref_key> → _resolve_ref() → action='do_install_proto'
   ↓ asyncio.to_thread(get_ssh_and_manager, ...)
   │   ↓ SSHManager.connect()
   │   ↓ ensure_docker_installed(ssh)
-  │   ↓ manager.install(...)
+  │   ↓ manager.install_protocol(...)
   ↓ db.add(ServerProtocol(...))
   ↓ db.commit()
   ↓ edit_message()                       ← update inline keyboard

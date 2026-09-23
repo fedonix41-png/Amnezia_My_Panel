@@ -8,21 +8,21 @@
 
 ## Точки входа
 
-| Функция | Строка | Назначение |
-|---|---|---|
-| `build_amnezia_config(text, hint)` | `:328` | Автодетект формата → native JSON |
-| `generate_vpn_link(text, hint)` | `:378` | `vpn://` URI для шеринга |
-| `generate_qr_content(text, hint)` | `:355` | Base64url для QR-кода |
+| Функция | Назначение |
+|---|---|
+| `build_amnezia_config(text, hint)` | Автодетект формата → native JSON |
+| `generate_vpn_link(text, hint)` | `vpn://` URI для шеринга |
+| `generate_qr_content(text, hint)` | Base64url для QR-кода |
 
 ## Автодетект
 
-- Начинается с `vless://` → VLESS-Reality парсинг (`_parse_vless_url`, `:103`)
-- Содержит `[Interface]` → WireGuard/AWG парсинг (`_parse_wg_config`, `:75`)
+- Начинается с `vless://` → VLESS-Reality парсинг (`_parse_vless_url`)
+- Содержит `[Interface]` → WireGuard/AWG парсинг (`_parse_wg_config`)
 - Иначе → `None`
 
 ## AWG version detection
 
-`_detect_awg_version()` (`:147`):
+`_detect_awg_version()`:
 
 | Условие | Версия |
 |---|---|
@@ -65,7 +65,7 @@ Reverse-engineered под Amnezia C++ `extractConfigFromQr` decoder:
 → base64url encode
 ```
 
-`qt_compress()` (`:60`) — реплицирует Qt `qCompress`: 4-byte big-endian length + zlib stream.
+`qt_compress()` реплицирует Qt `qCompress`: 4-byte big-endian length + zlib stream.
 
 ## Native JSON structure (упрощённо)
 

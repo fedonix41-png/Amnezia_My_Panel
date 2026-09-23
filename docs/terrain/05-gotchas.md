@@ -17,18 +17,18 @@
 
 | Значение | Где | Почему важно |
 |---|---|---|
-| `600_000` / `100_000` | `app.py` / `database/repositories.py` | PBKDF2 итерации — расходятся, менять согласованно с `verify_password` |
+| `600_000` | `app.py` и `database/repositories.py` | PBKDF2 итерации дублируются; менять согласованно с `verify_password` |
 | `300` (5 мин) | `API_TOKEN_TOUCH_INTERVAL` в `app.py` | Троттлинг перезаписи `last_used` |
 | `25` (сек) | `telegram_bot.py` | Long-polling timeout |
 | `15` (сек) | `managers/ssh_manager.py` | SSH connect timeout |
 
-## WireGuardManager — исключение в сигнатуре
+## Неоднородные сигнатуры managers
 
-См. [02-core §Диспетчеризация](02-core.md) — единственный источник истины. `_manager_call()` скрывает различие через `isinstance`.
+См. [02-core §Диспетчеризация](02-core.md). `_manager_call()` скрывает только особое поведение `WireGuardManager`; install/uninstall и часть Xray methods имеют отдельные ветки. Не выводи сигнатуру из одного manager.
 
 ## Дублирование `hash_password`
 
-См. [02-core §Криптография](02-core.md). Суть: `hash_password()` в `app.py` (600k, `iterations$salt$hash`) и в `database/repositories.py` (100k, `salt$hash`) расходятся; `verify_password()` читает оба.
+См. [02-core §Криптография](02-core.md). `hash_password()` определён в `app.py` и `database/repositories.py`; реализации должны оставаться согласованными. `verify_password()` также сохраняет чтение legacy 2-part hashes.
 
 ## Connection reconciliation (деструктивный!)
 

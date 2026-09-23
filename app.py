@@ -22,6 +22,7 @@ import zipfile
 import signal
 from datetime import datetime
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 import io
 from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse, StreamingResponse, FileResponse
 from starlette.background import BackgroundTask
@@ -787,7 +788,20 @@ def watch_tunnel_output(provider: str):
 
 def build_tunnel_command(provider: str, binary: str, local_url: str, authtoken: str = ''):
     if provider == 'cloudflare':
-        return [binary, 'tunnel', '--url', local_url, '--no-autoupdate']
+        # Quick Tunnels normally forward their random *.trycloudflare.com Host
+        # header to the origin.  Production rejects that header through
+        # TrustedHostMiddleware, so make cloudflared address the origin by the
+        # same local host used in --url instead of weakening host validation.
+        origin_host = urlsplit(local_url).hostname or '127.0.0.1'
+        return [
+            binary,
+            'tunnel',
+            '--url',
+            local_url,
+            '--http-host-header',
+            origin_host,
+            '--no-autoupdate',
+        ]
     if provider == 'ngrok':
         cmd = [binary, 'http', local_url, '--log=stdout']
         return cmd
@@ -1505,7 +1519,7 @@ async def tpl(db, request, template, **kwargs):
         'all_translations_json': json.dumps(TRANSLATIONS)
     }
     ctx.update(kwargs)
-    return templates.TemplateResponse(template, ctx)
+    return templates.TemplateResponse(request=request, name=template, context=ctx)
 
 
 # ======================== Pydantic Models ========================

@@ -1,7 +1,7 @@
 import uuid
 import secrets
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -30,7 +30,7 @@ class AddUserRequest(BaseModel):
     server_id: Optional[int] = None
     protocol: Optional[str] = None
     connection_name: Optional[str] = None
-    expiration_date: Optional[str] = None
+    expiration_date: Optional[datetime] = None
     telemt_quota: Optional[str] = None
     telemt_max_ips: Optional[int] = None
     telemt_expiry: Optional[str] = None
@@ -45,7 +45,7 @@ class UpdateUserRequest(BaseModel):
     description: Optional[str] = None
     traffic_limit: Optional[float] = None
     traffic_reset_strategy: Optional[str] = None
-    expiration_date: Optional[str] = None
+    expiration_date: Optional[datetime] = None
     password: Optional[str] = None
 
 
@@ -145,10 +145,10 @@ async def api_add_user(request: Request, req: AddUserRequest, db: AsyncSession =
             traffic_reset_strategy=req.traffic_reset_strategy or 'never',
             traffic_used=0,
             traffic_total=0,
-            last_reset_at=datetime.now().isoformat(),
+            last_reset_at=datetime.now(timezone.utc),
             expiration_date=req.expiration_date,
             enabled=True,
-            created_at=datetime.now().isoformat(),
+            created_at=datetime.now(timezone.utc),
             share_enabled=False,
             share_token=secrets.token_urlsafe(16),
         )
@@ -244,7 +244,7 @@ async def api_update_user(request: Request, user_id: str, req: UpdateUserRequest
         
         if req.traffic_reset_strategy is not None:
             user.traffic_reset_strategy = req.traffic_reset_strategy
-            user.last_reset_at = datetime.now().isoformat()
+            user.last_reset_at = datetime.now(timezone.utc)
             
         req_fields = getattr(req, 'model_fields_set', getattr(req, '__fields_set__', set()))
         if 'expiration_date' in req_fields:

@@ -41,21 +41,23 @@ Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номе
 
 `_manager_call(manager, method, protocol, *args, **kwargs)` в `app.py`:
 - **WireGuardManager**: пропускает `protocol` аргумент (историческое исключение)
-- Остальные: `protocol_type` первым аргументом
+- Остальные: передаёт `protocol` первым аргументом, но это корректно только для methods с соответствующей сигнатурой
 - `getattr(manager, method)` — динамический dispatch
+
+`_manager_call` не является полной адаптер-абстракцией. `install_protocol` и `remove_container` в `routers/protocols.py` вызываются по явным веткам. Xray хранит protocol key в manager instance, но его client methods имеют смешанные сигнатуры. Перед рефакторингом проверяй method definition и все call sites.
 
 ## Криптография
 
 | Функция | Расположение | Алгоритм |
 |---|---|---|
 | `hash_password()` | `app.py` | PBKDF2-HMAC-SHA256, 600k итераций, random salt, формат `iterations$salt$hash` (3 части) |
-| `verify_password()` | `app.py` | Разбирает 3-part (`iterations$salt$hash`) и 2-part (`salt$hash`), по умолчанию 100k итераций |
+| `verify_password()` | `app.py` | Разбирает текущий 3-part и legacy 2-part форматы |
 | `encrypt_secret()` | `managers/secrets.py` | Fernet, формат `v1:<token>`, идемпотентен |
 | `decrypt_secret()` | `managers/secrets.py` | Decrypt `v1:` prefix, plaintext passthrough |
 | `_hash_api_token()` | `app.py` | SHA-256 для API-токенов |
 | `_generate_api_token()` | `app.py` | `awp_` + 32-byte URL-safe |
 
-⚠️ **Дублирование:** `database/repositories.py` тоже имеет `hash_password`, но с **100k** итераций и форматом `salt$hash` (2 части). `verify_password()` читает оба — новые пароли всегда через версию `app.py`. См. [05-gotchas](05-gotchas.md).
+⚠️ **Дублирование:** `app.py` и `database/repositories.py` имеют отдельные `hash_password`. Сейчас оба используют 600k итераций и формат `iterations$salt$hash`; при изменении параметров их нужно менять согласованно.
 
 ## Конфиг-генерация VPN
 
