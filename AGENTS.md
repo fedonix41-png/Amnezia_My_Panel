@@ -7,6 +7,10 @@
 - Проверка синтаксиса: `venv/bin/python -m py_compile <file>`.
 - Тесты: `venv/bin/python -m pytest` или точечно `venv/bin/python -m pytest <test> -q`.
 - Тесты используют in-memory SQLite и моки SSH; они не имеют доступа к production-серверам.
+- Запуск dev-сервера: `venv/bin/uvicorn app:app --reload --port 5000`.
+- Локальный сетап работает с `AWP_DEV=0` и PostgreSQL из `docker-compose.dev.yml` (контейнер `amnezia_db_dev`); `DATABASE_URL` берётся из `.env`. `AWP_DEV=1` — опциональный изолированный режим; не включай его в рабочем окружении: эфемерный `MASTER_KEY` сделает секреты из БД нерасшифруемыми.
+- Миграции: `venv/bin/alembic revision --autogenerate -m "<msg>"`, применение — `venv/bin/alembic upgrade head`.
+- Зависимости: `venv/bin/pip install -r requirements.txt`, для тестов также `-r requirements-dev.txt`.
 
 ## Что это за проект
 
@@ -32,6 +36,9 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 ## Карта кода
 
 - `app.py` — FastAPI app, auth helpers, protocol registry/factory, tunnels, background jobs, lifespan.
+- `config.py` — загрузка `.env`, boot-time валидация `SECRET_KEY`/`MASTER_KEY` (SystemExit при ошибке вне `AWP_DEV=1`).
+- `middleware.py` — CSRF, security headers, rate limiting; порядок стека задокументирован комментарием у `add_middleware` в `app.py`.
+- `services/` — package для общих service-функций, разделяемых роутерами и Telegram-ботом (пока пуст).
 - `routers/` — HTTP API и HTML entry points.
 - `managers/` — SSH и реализации протоколов.
 - `database/` — ORM, sessions, repositories, settings CRUD.
@@ -82,7 +89,7 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 
 - Не добавляй новое process-global state. Существующие исключения: `TUNNEL_RUNTIMES`, `_callback_refs`, `_pending_inputs`.
 - Не ломай `import app as app_module` без отдельного плана декомпозиции.
-- Не создавай feature-файлы в корне: endpoints идут в `routers/`, protocol logic в `managers/`, общие services — в текущий подходящий package.
+- Не создавай feature-файлы в корне: endpoints идут в `routers/`, protocol logic в `managers/`, общие services — в `services/`.
 - Не добавляй `try/except` без логирования, если ошибка не является ожидаемой и безопасно игнорируемой.
 - Не открывай реальные SSH-сокеты в тестах.
 

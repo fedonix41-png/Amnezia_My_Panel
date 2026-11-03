@@ -1,9 +1,8 @@
 """Symmetric encryption of SSH secrets (passwords / private keys) at rest.
 
-Secrets are stored in ``data.json`` as ``"v1:<fernet-token>"``. The ``v1:``
-version prefix lets us distinguish encrypted values from legacy plaintext,
-so existing deployments keep working until ``scripts/migrate_secrets.py``
-re-encrypts them in place.
+Secrets are stored in the database as ``"v1:<fernet-token>"``. The ``v1:``
+version prefix distinguishes encrypted values from legacy plaintext left
+over from the ``data.json`` era (see ``scripts/migrate_secrets.py``).
 
 The Fernet key comes from ``config.MASTER_KEY`` (validated at boot). Losing
 that key makes every encrypted secret unrecoverable — back it up.
