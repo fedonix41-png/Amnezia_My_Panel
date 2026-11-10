@@ -90,7 +90,7 @@ _bot_task: Optional[asyncio.Task] = None
 _callback_refs = {}
 _pending_inputs = {}
 
-CLIENT_PROTOCOLS = {"awg", "awg2", "awg_legacy", "xray", "telemt", "wireguard"}
+CLIENT_PROTOCOLS = {"awg", "awg2", "awg3", "awg_legacy", "xray", "telemt", "wireguard"}
 SERVICE_PROTOCOLS = {"dns", "adguard", "socks5", "nginx"}
 
 
@@ -213,6 +213,7 @@ def _protocol_display_name(protocol: str) -> str:
     names = {
         "awg": "AmneziaWG",
         "awg2": "AmneziaWG 2.0",
+        "awg3": "AmneziaWG 3.1",
         "awg_legacy": "AmneziaWG Legacy",
         "xray": "Xray",
         "telemt": "Telemt",
