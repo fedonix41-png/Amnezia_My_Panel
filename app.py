@@ -965,8 +965,10 @@ async def wait_for_tunnel_url(provider: str, seconds: int = 20):
     return get_tunnel_status(provider)
 
 
-BASE_PROTOCOLS = ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'dns', 'wireguard', 'socks5', 'adguard', 'nginx']
-MULTI_INSTANCE_PROTOCOLS = {'awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'socks5'}
+BASE_PROTOCOLS = ['awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'dns', 'wireguard', 'socks5', 'adguard', 'nginx']
+MULTI_INSTANCE_PROTOCOLS = {'awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'socks5'}
+# Bases whose managers expose per-peer traffic counters (get_clients/get_traffic_snapshot).
+CLIENT_TRAFFIC_BASES = ('awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'wireguard')
 
 
 def protocol_base(protocol: str) -> str:
@@ -1003,6 +1005,7 @@ def protocol_display_name(protocol: str) -> str:
     names = {
         'awg': 'AmneziaWG',
         'awg2': 'AmneziaWG 2.0',
+        'awg3': 'AmneziaWG 3.1',
         'awg_legacy': 'AmneziaWG Legacy',
         'xray': 'Xray',
         'telemt': 'Telemt',
@@ -1022,6 +1025,7 @@ def protocol_container_name(protocol: str) -> Optional[str]:
     base_names = {
         'awg': 'amnezia-awg',
         'awg2': 'amnezia-awg2',
+        'awg3': 'amnezia-awg3',
         'awg_legacy': 'amnezia-awg-legacy',
         'xray': 'amnezia-xray',
         'telemt': 'telemt',
@@ -1850,22 +1854,37 @@ def _scrape_server_traffic(server, sid, my_conns):
             active_protos = server.get('protocols', {})
         else:
             active_protos = {}
-        for proto in ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'wireguard']:
-            if proto in active_protos:
-                manager = get_protocol_manager(ssh, proto)
+        for proto in active_protos:
+            # Only client-capable bases produce peers; service protocols
+            # (dns/socks5/adguard/nginx) would fall back to AWGManager and break.
+            if protocol_base(proto) not in CLIENT_TRAFFIC_BASES:
+                continue
+            manager = get_protocol_manager(ssh, proto)
+            client_bytes = None
+            snapshot_fn = getattr(manager, 'get_traffic_snapshot', None)
+            if callable(snapshot_fn):
+                try:
+                    snap = _manager_call(manager, 'get_traffic_snapshot', proto)
+                    client_bytes = {
+                        pid: p.get('rx_bytes', 0) + p.get('tx_bytes', 0)
+                        for pid, p in (snap.get('peers') or {}).items()
+                    }
+                except Exception:
+                    client_bytes = None  # fall back to get_clients below
+            if client_bytes is None:
                 clients = _manager_call(manager, 'get_clients', proto)
                 client_bytes = {}
                 for c in clients:
                     rx = c.get('userData', {}).get('dataReceivedBytes', 0)
                     tx = c.get('userData', {}).get('dataSentBytes', 0)
                     client_bytes[c.get('clientId')] = rx + tx
-                    
-                for uc in my_conns:
-                    if uc['protocol'] == proto and uc['client_id'] in client_bytes:
-                        curr_bytes = client_bytes[uc['client_id']]
-                        last_bytes = uc.get('last_bytes') or 0
-                        delta = curr_bytes - last_bytes if curr_bytes >= last_bytes else curr_bytes
-                        server_updates.append((uc['id'], delta, curr_bytes))
+
+            for uc in my_conns:
+                if uc['protocol'] == proto and uc['client_id'] in client_bytes:
+                    curr_bytes = client_bytes[uc['client_id']]
+                    last_bytes = uc.get('last_bytes') or 0
+                    delta = curr_bytes - last_bytes if curr_bytes >= last_bytes else curr_bytes
+                    server_updates.append((uc['id'], delta, curr_bytes))
     except Exception as e:
         logger.error(f"Traffic sync err server {sid}: {e}")
     finally:

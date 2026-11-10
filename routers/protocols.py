@@ -40,6 +40,10 @@ class InstallProtocolRequest(BaseModel):
     adguard_expose_doh: Optional[bool] = None
     nginx_domain: Optional[str] = None
     nginx_email: Optional[str] = None
+    awg_mtu: Optional[int] = None
+    awg_dns: Optional[str] = None
+    awg_dns6: Optional[str] = None
+    special_junk: Optional[dict] = None
 
 
 class Socks5SettingsRequest(BaseModel):
@@ -93,6 +97,18 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
             install_protocol = req.protocol
         install_base = app_module.protocol_base(install_protocol)
 
+        if req.port:
+            try:
+                req_port_int = int(req.port)
+            except (TypeError, ValueError):
+                return JSONResponse({'error': 'Invalid port'}, status_code=400)
+            for existing in db_protocols.values():
+                if existing.port == req_port_int and existing.protocol_type != install_protocol:
+                    return JSONResponse(
+                        {'error': f'Port {req_port_int} is already used by {existing.protocol_type}'},
+                        status_code=400,
+                    )
+
         ssh = app_module.get_ssh(server, db)
         try:
             await asyncio.to_thread(ssh.connect)
@@ -140,7 +156,14 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
                         email=req.nginx_email,
                     )
                 else:
-                    return manager.install_protocol(install_protocol, port=req.port)
+                    return manager.install_protocol(
+                        install_protocol,
+                        port=req.port,
+                        mtu=req.awg_mtu,
+                        dns=req.awg_dns,
+                        dns6=req.awg_dns6,
+                        special_junk=req.special_junk,
+                    )
 
             result = await asyncio.to_thread(_do_install)
             if not isinstance(result, dict):
@@ -177,6 +200,9 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
                 
             proto_record.extra_params = {
                 "awg_params": result.get('awg_params', {}),
+                "mtu": req.awg_mtu,
+                "dns": req.awg_dns,
+                "dns6": req.awg_dns6,
                 "settings": settings
             }
                 

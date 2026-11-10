@@ -427,6 +427,11 @@ async def api_check_server(request: Request, server_id: int, cached: bool = Fals
                     extra_params = db_proto.extra_params or {}
                     if extra_params.get('awg_params') and not merged.get('awg_params'):
                         merged['awg_params'] = extra_params['awg_params']
+                    # Fallback for a stopped container: version fields were
+                    # persisted while it was last seen running.
+                    for key in ('protocol_version', 'header_protection'):
+                        if merged.get(key) is None and extra_params.get(key) is not None:
+                            merged[key] = extra_params[key]
                     merged['base_protocol'] = db_proto.base_protocol or app_module.protocol_base(proto)
                     merged['instance'] = db_proto.instance or app_module.protocol_instance(proto)
                     merged['display_name'] = db_proto.display_name or app_module.protocol_display_name(proto)
@@ -475,6 +480,29 @@ async def api_check_server(request: Request, server_id: int, cached: bool = Fals
                 status['protocols'][proto] = result
                 if err:
                     continue
+                if not result.get('container_exists') and proto in db_protocols:
+                    if should_preserve_saved_protocol(proto, result, err):
+                        status['protocols'][proto]['container_exists'] = True
+                        status['protocols'][proto].setdefault('container_running', False)
+                        status['protocols'][proto]['status_preserved'] = True
+                    else:
+                        await db.delete(db_protocols[proto])
+                        del db_protocols[proto]
+                        changed = True
+                    continue
+                if proto in db_protocols:
+                    # Persist new AWG status fields for the stopped-container fallback.
+                    if app_module.protocol_base(proto) in ('awg', 'awg2', 'awg3', 'awg_legacy'):
+                        new_extra = dict(db_protocols[proto].extra_params or {})
+                        extra_changed = False
+                        for key in ('protocol_version', 'header_protection'):
+                            if result.get(key) is not None and new_extra.get(key) != result[key]:
+                                new_extra[key] = result[key]
+                                extra_changed = True
+                        if extra_changed:
+                            db_protocols[proto].extra_params = new_extra
+                            changed = True
+                    continue
                 if result.get('container_exists'):
                     if proto not in db_protocols:
                         new_proto = models.ServerProtocol(
@@ -502,21 +530,13 @@ async def api_check_server(request: Request, server_id: int, cached: bool = Fals
                             })
                         new_proto.extra_params = {
                             "awg_params": result.get('awg_params', {}),
+                            "protocol_version": result.get('protocol_version'),
+                            "header_protection": result.get('header_protection'),
                             "settings": settings
                         }
                         db.add(new_proto)
                         db_protocols[proto] = new_proto
                         changed = True
-                else:
-                    if proto in db_protocols:
-                        if should_preserve_saved_protocol(proto, result, err):
-                            status['protocols'][proto]['container_exists'] = True
-                            status['protocols'][proto].setdefault('container_running', False)
-                            status['protocols'][proto]['status_preserved'] = True
-                        else:
-                            await db.delete(db_protocols[proto])
-                            del db_protocols[proto]
-                            changed = True
                     
             if changed:
                 await db.commit()
