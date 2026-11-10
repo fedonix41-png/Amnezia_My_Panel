@@ -4,6 +4,7 @@
 {% set conn_badges = {
     'awg': 'badge-success',
     'awg2': 'badge-accent',
+    'awg3': 'badge-accent',
     'awg_legacy': 'badge-accent',
     'xray': 'badge-info',
     'socks5': 'badge-warn',
@@ -31,8 +32,8 @@
                     <div class="client-meta">
                         <span>{{ icon('server') }} {{ c.server_name }}</span>
                         <span class="badge {{ conn_badges.get(c.protocol, 'badge-info') }}" style="font-size:0.65rem;">
-                            {{ 'AmneziaWG' if c.protocol == 'awg' else ('AmneziaWG 2.0' if c.protocol == 'awg2' else ('AWG Legacy' if c.protocol == 'awg_legacy' else
-                            ('Xray' if c.protocol == 'xray' else c.protocol | upper))) }}
+                            {{ 'AmneziaWG' if c.protocol == 'awg' else ('AmneziaWG 2.0' if c.protocol == 'awg2' else ('AmneziaWG 3.1' if c.protocol == 'awg3' else ('AWG Legacy' if c.protocol == 'awg_legacy' else
+                            ('Xray' if c.protocol == 'xray' else c.protocol | upper)))) }}
                         </span>
                         {% if c.created_at %}
                         <span>{{ icon('calendar') }} {{ c.created_at[:10] }}</span>

@@ -114,15 +114,39 @@
 </div>
 
 <div class="protocol-cards" id="protocols-grid">
-    <!-- AWG2 Card (first - new version) -->
+    <!-- AWG 3.1 Card (first - newest version) -->
+    <div class="card card-hover protocol-card protocol-awg" id="proto-awg3">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
+            <div class="protocol-icon">{{ icon('sparkles') }}</div>
+            <div class="flex gap-sm" id="awg3-ctrl" style="display:none!important;"></div>
+        </div>
+        <div class="protocol-name">AmneziaWG 3.1 <span
+                style="font-size:0.65rem; background:var(--accent); color:#fff; padding:2px 6px; border-radius:8px; vertical-align:middle;">NEW</span>
+        </div>
+        <div class="protocol-desc">
+            {{ _('awg_desc') }}
+        </div>
+        <div class="protocol-status" id="awg3-status">
+            <span class="badge badge-warn"><span class="badge-dot"></span> {{ _('not_checked') }}</span>
+        </div>
+        <div id="awg3-info" class="hidden">
+            <div class="protocol-info" id="awg3-info-grid"></div>
+        </div>
+        <div class="flex gap-sm" id="awg3-actions">
+            <button class="btn btn-primary btn-sm" onclick="openInstallModal('awg3')" id="awg3-install-btn"
+                style="flex:1">
+                {{ _('install') }}
+            </button>
+        </div>
+    </div>
+
+    <!-- AWG2 Card -->
     <div class="card card-hover protocol-card protocol-awg" id="proto-awg2">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-sm);">
             <div class="protocol-icon">{{ icon('sparkles') }}</div>
             <div class="flex gap-sm" id="awg2-ctrl" style="display:none!important;"></div>
         </div>
-        <div class="protocol-name">AmneziaWG 2.0 <span
-                style="font-size:0.65rem; background:var(--accent); color:#fff; padding:2px 6px; border-radius:8px; vertical-align:middle;">NEW</span>
-        </div>
+        <div class="protocol-name">AmneziaWG 2.0</div>
         <div class="protocol-desc">
             {{ _('awg_desc') }}
         </div>
@@ -371,6 +395,7 @@
                 style="width:auto; min-width:160px;">
                 <option value="awg">AmneziaWG</option>
                 <option value="awg2">AmneziaWG 2.0</option>
+                <option value="awg3">AmneziaWG 3.1</option>
                 <option value="awg_legacy">AWG Legacy</option>
                 <option value="xray">Xray</option>
                 <option value="telemt">Telemt</option>
@@ -437,6 +462,38 @@
                 <label class="form-label" id="installPortLabel">{{ _('port') }}</label>
                 <input class="form-input" type="number" id="installPort" value="55424" min="1" max="65535">
                 <div class="form-hint" id="installPortHint">{{ _('port_default_hint') }}</div>
+            </div>
+
+            <div id="awgOptions"
+                style="display:none; padding: var(--space-md); background: rgba(0,0,0,0.03); border-radius: var(--radius-md); margin-bottom: var(--space-md);">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">MTU</label>
+                        <input class="form-input" type="number" id="installAwgMtu" value="" min="576" max="1500" placeholder="auto">
+                        <div class="form-hint">AWG 3.x: auto-derived from obfuscation; default 1280</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DNS</label>
+                        <input class="form-input" type="text" id="installAwgDns" value="" placeholder="1.1.1.1, 1.0.0.1">
+                    </div>
+                </div>
+                <div class="form-group" id="awgDns6Group" style="display:none;">
+                    <label class="form-label">DNS IPv6</label>
+                    <input class="form-input" type="text" id="installAwgDns6" value="" placeholder="2606:4700:4700::1111">
+                </div>
+                <div class="form-group" id="awgJunkGroup">
+                    <label class="form-label">Special junk (I1–I5)</label>
+                    <div class="form-row">
+                        <input class="form-input" type="text" id="installAwgI1" placeholder="I1" title="I1">
+                        <input class="form-input" type="text" id="installAwgI2" placeholder="I2" title="I2">
+                    </div>
+                    <div class="form-row">
+                        <input class="form-input" type="text" id="installAwgI3" placeholder="I3" title="I3">
+                        <input class="form-input" type="text" id="installAwgI4" placeholder="I4" title="I4">
+                    </div>
+                    <input class="form-input" type="text" id="installAwgI5" placeholder="I5" title="I5">
+                    <div class="form-hint">Leave empty to generate automatically</div>
+                </div>
             </div>
 
             <div id="telemtOptions"
@@ -812,7 +869,8 @@
     const SERVER_ID = {{ server_id }};
     const SERVER_HOST = "{{ server.host }}";
     const MARKETPLACE_APPS = [
-        { proto: 'awg2', category: 'protocols', icon: 'sparkles', title: 'AmneziaWG 2.0', descKey: 'awg_desc', badge: 'NEW' },
+        { proto: 'awg3', category: 'protocols', icon: 'sparkles', title: 'AmneziaWG 3.1', descKey: 'awg_desc', badge: 'NEW' },
+        { proto: 'awg2', category: 'protocols', icon: 'sparkles', title: 'AmneziaWG 2.0', descKey: 'awg_desc' },
         { proto: 'awg', category: 'protocols', icon: 'hexagon', title: 'AmneziaWG', descKey: 'awg_desc' },
         { proto: 'awg_legacy', category: 'protocols', icon: 'radio', title: 'AmneziaWG Legacy', descKey: 'awg_legacy_desc' },
         { proto: 'xray', category: 'protocols', icon: 'zap', title: 'Xray (VLESS-Reality)', descKey: 'xray_desc' },
@@ -852,7 +910,7 @@
     }
 
     function isMultiInstanceBase(proto) {
-        return ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'socks5'].includes(protoBase(proto));
+        return ['awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'socks5'].includes(protoBase(proto));
     }
 
     function nextSuggestedPort(base, fallback) {
@@ -1054,6 +1112,7 @@
         switch (base) {
             case 'awg': title = 'AmneziaWG'; break;
             case 'awg2': title = 'AmneziaWG 2.0'; break;
+            case 'awg3': title = 'AmneziaWG 3.1'; break;
             case 'awg_legacy': title = 'AmneziaWG Legacy'; break;
             case 'xray': title = 'Xray'; break;
             case 'telemt': title = 'Telemt'; break;
@@ -1117,7 +1176,7 @@
 
                 for (const [proto, info] of orderedProtocolEntries(data.protocols)) {
                     updateProtocolCard(proto, info);
-                    const isVPN = ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'wireguard'].includes(protoBase(proto));
+                    const isVPN = ['awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'wireguard'].includes(protoBase(proto));
                     if (info.container_running && isVPN) {
                         const opt = document.createElement('option');
                         opt.value = proto;
@@ -1350,6 +1409,9 @@
                 }
                 if (!isService && info.clients_count !== undefined) {
                     grid += `<div class="protocol-info-item"><span class="protocol-info-label">${_('connections')}</span><span class="protocol-info-value">${info.clients_count}</span></div>`;
+                }
+                if (!isService && info.protocol_version && String(protoBase(proto)).startsWith('awg')) {
+                    grid += `<div class="protocol-info-item"><span class="protocol-info-label">AWG</span><span class="protocol-info-value">${info.protocol_version}</span></div>`;
                 }
                 infoGrid.innerHTML = grid;
             }
@@ -1590,11 +1652,13 @@
         const socks5Opts = document.getElementById('socks5Options');
         const adguardOpts = document.getElementById('adguardOptions');
         const nginxOpts = document.getElementById('nginxOptions');
+        const awgOpts = document.getElementById('awgOptions');
 
         telemtOpts.style.display = 'none';
         socks5Opts.style.display = 'none';
         adguardOpts.style.display = 'none';
         nginxOpts.style.display = 'none';
+        awgOpts.style.display = 'none';
 
         if (base === 'dns') {
             portLabel.textContent = _('port') + ' (Internal)';
@@ -1636,6 +1700,11 @@
             portInput.value = currentInstallAnother ? nextSuggestedPort(currentInstallProto, 55424) : '55424';
             portInput.disabled = false;
             portHint.textContent = currentInstallAnother ? _('port_next_instance_hint') : _('port_default_hint');
+            if (['awg', 'awg2', 'awg3'].includes(base)) {
+                awgOpts.style.display = 'block';
+                document.getElementById('awgJunkGroup').style.display = base === 'awg3' ? 'none' : 'block';
+                document.getElementById('awgDns6Group').style.display = base === 'awg3' ? 'block' : 'none';
+            }
         }
 
         document.getElementById('installForm').classList.remove('hidden');
@@ -1697,6 +1766,21 @@
             } else if (protoBase(currentInstallProto) === 'nginx') {
                 params.nginx_domain = document.getElementById('installNginxDomain').value.trim();
                 params.nginx_email = document.getElementById('installNginxEmail').value.trim();
+            } else if (['awg', 'awg2', 'awg3'].includes(protoBase(currentInstallProto))) {
+                const mtu = parseInt(document.getElementById('installAwgMtu').value);
+                if (mtu) params.awg_mtu = mtu;
+                const dns = document.getElementById('installAwgDns').value.trim();
+                if (dns) params.awg_dns = dns;
+                const dns6 = document.getElementById('installAwgDns6').value.trim();
+                if (dns6) params.awg_dns6 = dns6;
+                if (protoBase(currentInstallProto) !== 'awg3') {
+                    const junk = {};
+                    ['I1', 'I2', 'I3', 'I4', 'I5'].forEach(k => {
+                        const v = document.getElementById('installAwg' + k).value.trim();
+                        if (v) junk[k.toLowerCase()] = v;
+                    });
+                    if (Object.keys(junk).length) params.special_junk = junk;
+                }
             }
             const result = await apiCall(`/api/servers/${SERVER_ID}/install`, 'POST', params);
             clearInterval(progressInterval);

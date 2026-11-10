@@ -4,6 +4,7 @@
 {% set proto_badges = {
     'awg': 'badge-success',
     'awg2': 'badge-accent',
+    'awg3': 'badge-accent',
     'awg_legacy': 'badge-accent',
     'xray': 'badge-info',
     'dns': 'badge-info',
@@ -79,8 +80,8 @@
                 {% for proto_key, proto_val in server.protocols.items() %}
                 <span class="badge {{ proto_badges.get(proto_key, 'badge-success') }}">
                     <span class="badge-dot"></span>
-                    {{ 'AWG' if proto_key == 'awg' else ('AWG-Legacy' if proto_key == 'awg_legacy' else ('Xray' if
-                    proto_key == 'xray' else proto_key | upper)) }}
+                    {{ 'AWG' if proto_key == 'awg' else ('AWG 3.1' if proto_key == 'awg3' else ('AWG-Legacy' if proto_key == 'awg_legacy' else ('Xray' if
+                    proto_key == 'xray' else proto_key | upper))) }}
                 </span>
                 {% endfor %}
                 {% else %}
