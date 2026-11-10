@@ -17,6 +17,7 @@ from managers.amnezia_config import (
     base64url_encode,
     _parse_wg_config,
     _parse_vless_url,
+    _detect_awg_version,
     _build_wg_json,
     _build_xray_json,
     build_amnezia_config,
@@ -377,3 +378,131 @@ class TestIntegration:
         decompressed = zlib.decompress(raw[12:])
         js = json.loads(decompressed)
         assert js["defaultContainer"] == "amnezia-wireguard"
+
+
+# ---------------------------------------------------------------------------
+# AWG 3.x / 3.1 (ported from upstream v1.8.10 AWGManager.get_client_config)
+# ---------------------------------------------------------------------------
+
+AWG_V3_CONF = """[Interface]
+Address = 10.8.0.2/32
+DNS = 1.1.1.1, 1.0.0.1
+PrivateKey = cLiEnTpRiVkEy=
+MTU = 1376
+Jc = 3
+Jmin = 50
+Jmax = 1000
+S1 = 15
+S2 = 15
+S3 = 15
+S4 = 15
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+I1 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+I2 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+I3 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+I4 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+I5 = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+CPS = signature
+HeaderProtectionKey = hPk=
+ContentPaddingAddition = 24
+RekeyAfterTime = 120
+RekeyTimeout = 15
+RejectAfterTime = 180
+KeepaliveTimeout = 10
+MaxHandshakeAttempts = 8
+
+[Peer]
+PublicKey = sErVeRpUbKeY=
+PresharedKey = pSk=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = vpn.example.com:55424
+PersistentKeepalive = 25
+"""
+
+AWG3_PARAM_KEYS = (
+    "HeaderProtectionKey", "ContentPaddingAddition",
+    "RekeyAfterTime", "RekeyTimeout", "RejectAfterTime",
+    "KeepaliveTimeout", "MaxHandshakeAttempts",
+    "RandomTrailers", "DisableCookies",
+)
+
+
+class TestDetectAwg3Version:
+    def test_header_protection_key_means_3x(self):
+        config_map = _parse_wg_config(AWG_V3_CONF)
+        assert _detect_awg_version(config_map) == "3.x"
+
+    def test_random_trailers_means_31(self):
+        config_map = _parse_wg_config(AWG_V3_CONF + "RandomTrailers = 4\n")
+        assert _detect_awg_version(config_map) == "3.1"
+
+    def test_disable_cookies_off_still_means_31(self):
+        # Explicit "off" also identifies the 3.1 config format (upstream
+        # get_server_status checks for any non-empty value).
+        config_map = _parse_wg_config(AWG_V3_CONF + "DisableCookies = off\n")
+        assert _detect_awg_version(config_map) == "3.1"
+
+    def test_v2_conf_still_detects_2(self):
+        config_map = _parse_wg_config(AWG_V2_CONF)
+        assert _detect_awg_version(config_map) == "2"
+
+    def test_plain_awg_without_version_markers(self):
+        config_map = _parse_wg_config(AWG_PLAIN_CONF)
+        assert _detect_awg_version(config_map) is None
+
+
+class TestBuildAwg3Json:
+    def _proto_section(self, conf=AWG_V3_CONF, hint="awg3"):
+        result = build_amnezia_config(conf, hint)
+        assert result is not None
+        return result["containers"][0]
+
+    def test_container_amnezia_awg3_with_hint(self):
+        entry = self._proto_section()
+        assert entry["container"] == "amnezia-awg3"
+        assert "awg3" in entry
+        assert entry["awg3"]["protocol_version"] == "3.x"
+
+    def test_all_awg3_param_fields_in_proto_section(self):
+        proto = self._proto_section()["awg3"]
+        for key in AWG3_PARAM_KEYS:
+            assert key in proto, f"missing {key} in proto section"
+        assert proto["HeaderProtectionKey"] == "hPk="
+        assert proto["ContentPaddingAddition"] == "24"
+        assert proto["CPS"] == "signature"
+
+    def test_version_31_when_trailers_present(self):
+        proto = self._proto_section(AWG_V3_CONF + "RandomTrailers = 4\n")["awg3"]
+        assert proto["protocol_version"] == "3.1"
+        assert proto["RandomTrailers"] == "4"
+
+    def test_no_hint_keeps_legacy_container_name(self):
+        # Existing awg/awg2 QR codes must not change: without a hint the
+        # container stays amnezia-awg even for 3.x configs (the client
+        # determines the version from the config keys, not the name).
+        for hint in (None, "awg", "awg2"):
+            result = build_amnezia_config(AWG_V3_CONF, hint)
+            entry = result["containers"][0]
+            assert entry["container"] == "amnezia-awg"
+            assert "awg" in entry
+            assert "awg3" not in entry
+
+    def test_multi_instance_hint_suffixes_container(self):
+        result = build_amnezia_config(AWG_V3_CONF, "awg3__2")
+        assert result["containers"][0]["container"] == "amnezia-awg3-2"
+
+    def test_awg3_roundtrip_qr(self):
+        qr = generate_qr_content(AWG_V3_CONF, "awg3")
+        padded = qr + "=" * (-len(qr) % 4)
+        raw = base64.urlsafe_b64decode(padded)
+        version = struct.unpack(">I", raw[:4])[0]
+        assert version == 0x07C00100
+        js = json.loads(zlib.decompress(raw[12:]))
+        assert js["defaultContainer"] == "amnezia-awg3"
+        proto = js["containers"][0]["awg3"]
+        assert proto["protocol_version"] == "3.x"
+        last_config = json.loads(proto["last_config"])
+        assert last_config["config"].startswith("[Interface]")

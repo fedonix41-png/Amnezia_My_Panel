@@ -43,6 +43,17 @@ _AWG_JUNK_FIELDS = (
     "CPS",
 )
 
+# AWG 3.x config keys (order matches upstream managers.awg_manager.AWG3_PARAM_MAP).
+# The official Amnezia client determines the AWG version from these keys, not
+# from the container name.
+_AWG3_FIELDS = (
+    "HeaderProtectionKey", "ContentPaddingAddition",
+    "RekeyAfterTime", "RekeyTimeout", "RejectAfterTime",
+    "KeepaliveTimeout", "MaxHandshakeAttempts",
+    "RandomTrailers", "DisableCookies",
+)
+_AWG3_VERSION_MARKERS = ("RandomTrailers", "DisableCookies")
+
 
 def qt_compress(data: bytes, level: int = 8) -> bytes:
     """Replicate Qt's ``qCompress``: 4-byte big-endian uncompressed length
@@ -147,10 +158,21 @@ def _extract_dns(config_map: dict[str, str], raw_config: str) -> tuple[str, str]
 def _detect_awg_version(config_map: dict[str, str]) -> str | None:
     """Determine ``protocol_version`` for AWG configs.
 
-    * S3 **and** S4 present     -> ``"2"``
-    * I1-I5 without S3/S4       -> ``"1.5"``
-    * otherwise                 -> ``None``
+    Order mirrors upstream ``AWGManager.get_server_status`` — the official
+    client installs AWG 3.x into the ``amnezia-awg2`` container, so only the
+    config keys tell the versions apart:
+
+    * RandomTrailers / DisableCookies (any non-empty value, incl. ``"off"``)
+      present          -> ``"3.1"``
+    * HeaderProtectionKey present                        -> ``"3.x"``
+    * S3 **and** S4 present                              -> ``"2"``
+    * I1-I5 without S3/S4                                -> ``"1.5"``
+    * otherwise                                          -> ``None``
     """
+    if any(str(config_map.get(f, "")).strip() for f in _AWG3_VERSION_MARKERS):
+        return "3.1"
+    if "HeaderProtectionKey" in config_map:
+        return "3.x"
     if "S3" in config_map and "S4" in config_map:
         return "2"
     if any(f in config_map for f in _AWG_I_FIELDS):
@@ -176,6 +198,7 @@ def _derive_pubkey(priv: str) -> str:
 def _build_wg_json(
     config_map: dict[str, str],
     raw_config: str,
+    protocol_hint: str | None = None,
 ) -> dict | None:
     """Build the Amnezia native JSON for a WireGuard or AWG config.
 
@@ -190,6 +213,16 @@ def _build_wg_json(
     is_awg = _AWG_REQUIRED_JUNK.issubset(config_map)
     proto_key = "awg" if is_awg else "wireguard"
     container = f"amnezia-{proto_key}"
+    hint_base = str(protocol_hint or "").split("__", 1)[0]
+    if hint_base == "awg3" and is_awg:
+        # Only an explicit hint may rename the container: existing awg/awg2
+        # QR codes must keep their current names (the client does not derive
+        # the version from the container name anyway).
+        proto_key = "awg3"
+        container = "amnezia-awg3"
+        idx = str(protocol_hint).split("__", 1)[1] if "__" in str(protocol_hint) else ""
+        if idx.isdigit() and int(idx) > 1:
+            container = f"amnezia-awg3-{idx}"
 
     host_name, port = _split_endpoint(config_map.get("Endpoint", ""))
 
@@ -244,7 +277,7 @@ def _build_wg_json(
     protocol_version = _detect_awg_version(config_map) if is_awg else None
     if protocol_version is not None:
         proto_section["protocol_version"] = protocol_version
-        for f in ("I1", "I2", "I3", "I4", "I5", "S3", "S4"):
+        for f in ("I1", "I2", "I3", "I4", "I5", "S3", "S4", "CPS") + _AWG3_FIELDS:
             proto_section[f] = config_map.get(f, "")
 
     dns1, dns2 = _extract_dns(config_map, raw_config)
@@ -347,7 +380,7 @@ def build_amnezia_config(
         config_map = _parse_wg_config(text)
         if not config_map:
             return None
-        return _build_wg_json(config_map, text)
+        return _build_wg_json(config_map, text, protocol_hint)
 
     return None
 

@@ -190,8 +190,8 @@ async def api_add_connection(request: Request, server_id: int, req: AddConnectio
                 pass
 
         if result.get('config'):
-            result['vpn_link'] = app_module.generate_vpn_link(result['config'])
-            result['qr_content'] = app_module.generate_qr_content(result['config'])
+            result['vpn_link'] = app_module.generate_vpn_link(result['config'], req.protocol)
+            result['qr_content'] = app_module.generate_qr_content(result['config'], req.protocol)
 
         if req.user_id and result.get('client_id'):
             conn = models.Connection(
@@ -334,8 +334,8 @@ async def api_get_connection_config(request: Request, server_id: int, req: Conne
                 await asyncio.to_thread(ssh.disconnect)
             except Exception:
                 pass
-        vpn_link = app_module.generate_vpn_link(config) if config else ''
-        qr_content = app_module.generate_qr_content(config) if config else ''
+        vpn_link = app_module.generate_vpn_link(config, req.protocol) if config else ''
+        qr_content = app_module.generate_qr_content(config, req.protocol) if config else ''
         if app_module.posthog_client:
             app_module.posthog_client.capture(
                 "vpn_config_requested",

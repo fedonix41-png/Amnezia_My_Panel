@@ -209,8 +209,8 @@ async def api_add_user(request: Request, req: AddUserRequest, db: AsyncSession =
                     result['connection_created'] = True
                     if conn_result.get('config'):
                         result['config'] = conn_result['config']
-                        result['vpn_link'] = app_module.generate_vpn_link(conn_result['config'])
-                        result['qr_content'] = app_module.generate_qr_content(conn_result['config'])
+                        result['vpn_link'] = app_module.generate_vpn_link(conn_result['config'], req.protocol)
+                        result['qr_content'] = app_module.generate_qr_content(conn_result['config'], req.protocol)
         app_module.capture_posthog_event(
             request,
             cur,
@@ -358,8 +358,8 @@ async def api_add_user_connection(request: Request, user_id: str, req: AddUserCo
         resp = {'status': 'success'}
         if result.get('config'):
             resp['config'] = result['config']
-            resp['vpn_link'] = app_module.generate_vpn_link(result['config'])
-            resp['qr_content'] = app_module.generate_qr_content(result['config'])
+            resp['vpn_link'] = app_module.generate_vpn_link(result['config'], req.protocol)
+            resp['qr_content'] = app_module.generate_qr_content(result['config'], req.protocol)
         return resp
     except Exception as e:
         app_module.logger.exception("Error adding user connection")

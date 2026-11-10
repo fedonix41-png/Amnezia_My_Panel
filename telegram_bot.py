@@ -714,7 +714,7 @@ async def _handle_send_qr(api: TelegramAPI, chat_id: int, callback_id: str, conn
 
         from managers.amnezia_config import generate_qr_content
         is_link_proto = _proto_base(proto) in ("xray", "telemt")
-        qr_text = config if is_link_proto else generate_qr_content(config)
+        qr_text = config if is_link_proto else generate_qr_content(config, proto)
         if not qr_text:
             await api.send_message(chat_id, "❌ Could not generate QR content.")
             return

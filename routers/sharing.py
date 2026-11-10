@@ -173,8 +173,8 @@ async def api_share_config(token: str, connection_id: str, request: Request, db:
                 await asyncio.to_thread(ssh.disconnect)
             except Exception:
                 pass
-        vpn_link = app_module.generate_vpn_link(config_text) if config_text else ''
-        qr_content = app_module.generate_qr_content(config_text) if config_text else ''
+        vpn_link = app_module.generate_vpn_link(config_text, conn.protocol) if config_text else ''
+        qr_content = app_module.generate_qr_content(config_text, conn.protocol) if config_text else ''
         return {'config': config_text, 'vpn_link': vpn_link, 'qr_content': qr_content}
     except Exception as e:
         app_module.logger.exception("Error getting shared config")
@@ -220,8 +220,8 @@ async def api_my_connection_config(request: Request, connection_id: str, db: Asy
                 await asyncio.to_thread(ssh.disconnect)
             except Exception:
                 pass
-        vpn_link = app_module.generate_vpn_link(config_text) if config_text else ''
-        qr_content = app_module.generate_qr_content(config_text) if config_text else ''
+        vpn_link = app_module.generate_vpn_link(config_text, conn.protocol) if config_text else ''
+        qr_content = app_module.generate_qr_content(config_text, conn.protocol) if config_text else ''
         return {'config': config_text, 'vpn_link': vpn_link, 'qr_content': qr_content}
     except Exception as e:
         app_module.logger.exception("Error getting my connection config")

@@ -1125,13 +1125,13 @@ def _manager_call(manager, method, protocol, *args, **kwargs):
     return fn(protocol, *args, **kwargs)
 
 
-def generate_vpn_link(config_text):
+def generate_vpn_link(config_text, protocol_hint=None):
     """Encode config into the Amnezia-native ``vpn://`` link format."""
-    return _amnezia_generate_vpn_link(config_text)
+    return _amnezia_generate_vpn_link(config_text, protocol_hint)
 
-def generate_qr_content(config_text):
+def generate_qr_content(config_text, protocol_hint=None):
     """Encode config into the Amnezia-native QR code payload format."""
-    return _amnezia_generate_qr_content(config_text)
+    return _amnezia_generate_qr_content(config_text, protocol_hint)
 
 
 # ===================== API tokens =====================
