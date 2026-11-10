@@ -79,7 +79,7 @@
   "no_connections": "No connections",
   "no_connections_desc": "Add your first connection to generate a VPN configuration",
   "install_protocol": "Install protocol",
-  "port_default_hint": "Default port: 55424. Make sure it's not busy",
+  "port_default_hint": "A random port from 30000 to 50000 is suggested. Make sure it's not busy",
   "port_xray_hint": "Default port: 443 (recommended for Xray). Make sure it's not taken by another web server.",
   "reinstall": "Reinstall",
   "uninstall_confirm": "Uninstall {}? All connections and configurations will be lost.",

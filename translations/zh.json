@@ -78,7 +78,7 @@
   "no_connections": "无连接",
   "no_connections_desc": "添加首个连接以生成 VPN 配置文件",
   "install_protocol": "安装协议",
-  "port_default_hint": "默认端口: 55424。请确保端口未被占用。",
+  "port_default_hint": "建议使用 30000 到 50000 之间的随机端口。请确保端口未被占用。",
   "port_xray_hint": "推荐端口: 443。请确保未被其他 Web 服务器使用。",
   "reinstall": "重新安装",
   "uninstall_confirm": "确定卸载 {}？所有连接和配置都将丢失。",

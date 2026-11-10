@@ -913,6 +913,22 @@
         return ['awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'socks5'].includes(protoBase(proto));
     }
 
+    // Mirrors Amnezia desktop client ProtocolUtils::getPortForInstall:
+    // VPN protocols (WireGuard/AWG family) and SOCKS5 get a random port in
+    // [30000, 50000); other services keep their fixed default ports.
+    function randomInstallPort() {
+        const used = new Set();
+        Object.values(currentProtocolStatus || {}).forEach(info => {
+            const p = parseInt(info && info.port, 10);
+            if (!Number.isNaN(p)) used.add(p);
+        });
+        for (let i = 0; i < 100; i++) {
+            const port = 30000 + Math.floor(Math.random() * 20000);
+            if (!used.has(port)) return String(port);
+        }
+        return '30000';
+    }
+
     function nextSuggestedPort(base, fallback) {
         const used = new Set();
         Object.entries(currentProtocolStatus || {}).forEach(([proto, info]) => {
@@ -1678,7 +1694,7 @@
             telemtOpts.style.display = 'block';
         } else if (base === 'socks5') {
             portLabel.textContent = _('port') + ' (TCP)';
-            portInput.value = currentInstallAnother ? nextSuggestedPort(currentInstallProto, 38080) : '38080';
+            portInput.value = currentInstallAnother ? nextSuggestedPort(currentInstallProto, 38080) : randomInstallPort();
             portInput.disabled = false;
             portHint.textContent = currentInstallAnother ? _('port_next_instance_hint') : _('socks5_port_hint');
             socks5Opts.style.display = 'block';
@@ -1697,7 +1713,7 @@
             updateNginxDnsHint();
         } else {
             portLabel.textContent = _('port') + ' (UDP)';
-            portInput.value = currentInstallAnother ? nextSuggestedPort(currentInstallProto, 55424) : '55424';
+            portInput.value = currentInstallAnother ? nextSuggestedPort(currentInstallProto, randomInstallPort()) : randomInstallPort();
             portInput.disabled = false;
             portHint.textContent = currentInstallAnother ? _('port_next_instance_hint') : _('port_default_hint');
             if (['awg', 'awg2', 'awg3'].includes(base)) {

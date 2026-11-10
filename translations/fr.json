@@ -78,7 +78,7 @@
   "no_connections": "Aucune connexion",
   "no_connections_desc": "Ajoutez votre première connexion pour générer un fichier VPN",
   "install_protocol": "Installer le protocole",
-  "port_default_hint": "Port par défaut : 55424. Assurez-vous qu'il est libre.",
+  "port_default_hint": "Un port aléatoire entre 30000 et 50000 est suggéré. Assurez-vous qu'il est libre.",
   "port_xray_hint": "Port recommandé : 443. Assurez-vous qu'il n'est pas utilisé par un serveur web.",
   "reinstall": "Réinstaller",
   "uninstall_confirm": "Désinstaller {} ? Toutes les données seront perdues.",
