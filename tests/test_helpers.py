@@ -12,6 +12,9 @@ os.environ.setdefault("AWP_DEV", "1")
 
 import base64
 
+from unittest.mock import Mock
+
+import app
 from app import (
     _t,
     _generate_api_token,
@@ -234,3 +237,30 @@ class TestLegacyDataFileMigration:
 
         _maybe_migrate_legacy_data_file()
         assert not os.path.exists(target)
+
+
+class TestProtocolRegistryAwg3:
+    def test_awg3_is_valid_base_protocol(self):
+        assert 'awg3' in app.BASE_PROTOCOLS
+        assert app.is_valid_protocol('awg3')
+        assert app.is_valid_protocol('awg3__2')
+
+    def test_awg3_multi_instance(self):
+        assert 'awg3' in app.MULTI_INSTANCE_PROTOCOLS
+        assert app.protocol_base('awg3__2') == 'awg3'
+        assert app.protocol_instance('awg3__2') == 2
+        assert app.next_protocol_key({}, 'awg3') == 'awg3'
+        assert app.next_protocol_key({'awg3': {}}, 'awg3') == 'awg3__2'
+
+    def test_awg3_display_and_container_names(self):
+        assert app.protocol_display_name('awg3') == 'AmneziaWG 3.1'
+        assert app.protocol_display_name('awg3__2') == 'AmneziaWG 3.1 #2'
+        assert app.protocol_container_name('awg3') == 'amnezia-awg3'
+        assert app.protocol_container_name('awg3__2') == 'amnezia-awg3-2'
+
+    def test_awg3_manager_factory(self):
+        # Unknown-to-factory client bases fall back to AWGManager; awg3 must
+        # resolve there without an explicit branch.
+        from managers.awg_manager import AWGManager
+        manager = app.get_protocol_manager(Mock(), 'awg3')
+        assert isinstance(manager, AWGManager)
