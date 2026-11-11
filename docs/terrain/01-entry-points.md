@@ -50,7 +50,8 @@
 |---|---|---|
 | auth | `routers/auth.py` | Логин, CAPTCHA |
 | servers | `routers/servers.py` | CRUD, ping, reboot, stats |
-| protocols | `routers/protocols.py` | Install/uninstall, конфиги, бэкапы |
+| protocols | `routers/protocols.py` | Install/uninstall, конфиги, бэкапы (list/create/download/upload/restore/delete) |
+| awg_plugin | `routers/awg_plugin.py` | Admin API обновлений компонентов AWG (kernel module/userspace): status/changelog/update/cancel |
 | connections | `routers/connections.py` | CRUD клиентов, toggle |
 | users | `routers/users.py` | Пользователи и назначения |
 | sharing | `routers/sharing.py` | Share-ссылки, self-service |

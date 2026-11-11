@@ -108,6 +108,6 @@ Reverse-engineered под Amnezia C++ `extractConfigFromQr` decoder:
 
 ## Что НЕ покрывается
 
-- Telemt (MTProto) — `build_amnezia_config` возвращает `None` для tg:// ссылок
+- Telemt (MTProto) — `build_amnezia_config` возвращает `None` для tg:// ссылок; fallback-ссылки из `TelemtManager._build_client_link` несут FakeTLS-паддинг `ee<secret><hex(tls_domain)>` при `tls_emulation` в конфиге инстанса (см. [02-core §TelemtManager](02-core.md))
 - SOCKS5 — нет native JSON формата, отдаётся как `socks5://user:pass@host:port`
 - DNS/AdGuard/Nginx — не VPN-протоколы

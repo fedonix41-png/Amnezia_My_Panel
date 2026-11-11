@@ -47,6 +47,8 @@
 
 Конструктор: `get_ssh(server, db)` в `app.py` — принимает dict или ORM `Server`, дешифрует credentials.
 
+**Sudo-цепочки:** `run_sudo_command` строит `sudo -S -p '' <cmd>`, поэтому в `sudo <a> && <b>` / `sudo <a> | <b>` привилегированной является только первая команда. Любая цепочка, где обе половины нуждаются в root, оборачивается в один shell: `sh -c '<a> && <b>'` / `bash -c '...'` (BackupManager, `AdguardManager._ensure_network`). Многострочные сценарии идут через `run_sudo_script` (SFTP → `sudo bash`); тяжёлые операции поднимают `timeout` (create/restore бэкапа — 180с, install docker — 300с).
+
 ## Туннели (Cloudflare / ngrok)
 
 | Компонент | Расположение | Описание |

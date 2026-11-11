@@ -100,7 +100,7 @@ WARP Docker Compose:
 
 1. **`warp_service.py` + `managers/split_tunnel.py` портированы** — незадекларированные зависимости `awg_manager` из upstream. Оба stdlib-only, покрыты unit-тестами без SSH/Docker.
 2. **Маппинг контейнера по `protocol_hint` отменён.** Исходный план предполагал, что `awg3`-hint в `amnezia_config` переименует контейнер в `amnezia-awg3`; реальный клиент Amnezia не знает ключ `awg3` и показывает «Not Installed». Upstream держит `amnezia-awg` для всех версий AWG (см. [06-vpn-formats](06-vpn-formats.md)).
-3. **Полный порт `xray_manager` НЕ сделан** — перенесены только точечные фиксы: adu-payload с `port`/`listen` (Xray-core v26 молча добавляет 0 пользователей без них) и `"Added 0 user"` как ошибка; `bbr` вместо `hybla` в sysctl контейнера. Полный порт — WP3.5.
+3. **`xray_manager` портирован полностью (WP3.5)** — `XRAY_CORE_VERSION=v26.10.31`, сборка образа через `_dockerfile_content()`, `rename_client`, `public_port` в конфигах, compat `docker_container_state`; adu-payload с `port`/`listen` и `"Added 0 user"` как ошибка сохранены.
 
 ## Smoke Test Checklist (кратко)
 

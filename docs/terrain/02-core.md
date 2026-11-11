@@ -60,7 +60,15 @@ Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номе
 - `WireGuardManager.add_client(client_name, server_host, public_port=None)` (instance-порт менеджер знает сам)
 - `WireGuardManager.get_client_config(client_id, server_host, port=None, public_port=None)`
 
-`Endpoint = {server_host}:{public_port or port}`. Остальные менеджеры `public_port` не принимают.
+`Endpoint = {server_host}:{public_port or port}`. `TelemtManager.get_client_config` также принимает опциональный `public_port` (fallback-ссылки набирают его вместо instance-порта); остальные менеджеры `public_port` не принимают.
+
+### TelemtManager (порт upstream v1.8.10)
+
+- Fallback-ссылки собирает `_build_client_link(secret, host, port, config_text)`: при `tls_emulation` в конфиге секрет получает FakeTLS-паддинг `ee<secret><hex(tls_domain)>`; без домена — `RuntimeError`. API-ссылки telemt отдаёт как есть.
+- `_api_request` строит curl через `shlex.quote` каждого аргумента с `--` перед URL и `--globoff`.
+- `rename_client(protocol_type, client_id, new_name)` — имя = identity: переписывает все `username = ...` строки в `access.*` секциях (сохраняя `#`-маркер отключённых), пересоздаёт runtime-пользователя через API (DELETE + POST).
+- `_patch_public_links` / `set_public_endpoint` — управление `public_host`/`public_port` в `[general.links]` без переустановки.
+- `check_protocol_installed`/`check_container_running` поддерживают опциональный `ssh.docker_container_state` (тот же compat-паттерн, что в AWG/WG/Xray/SOCKS5/AdGuard/Nginx).
 
 ### Поля `get_server_status` (AWG/WG)
 
@@ -81,6 +89,9 @@ Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номе
 | `managers/clients_table.py` | Атомарная запись clientsTable: приватный staging в /tmp, `docker cp` + rename внутри контейнера, бэкап предыдущей версии `clientsTable.panel-backup`; вызывающий код держит RMW-lock |
 | `managers/clients_table_reader.py` | Strict read-only чтение clientsTable |
 | `managers/traffic_counters.py` | `read_transfer_snapshot(ssh, container, binary, interface)` — маркер-фреймированный `show transfer` (`COUNTERS_V1`), точные int-счётчики без cache fallback; см. [03-infra](03-infrastructure.md) |
+| `managers/awg_plugin_updater.py` | Обновление компонентов AWG (kernel module через DKMS, userspace-контейнер): preflight, бэкап, атомарная замена, rollback; stdlib-only, лог шагов для роутера |
+| `managers/backup_manager.py` | Протокольные бэкапы: create/list на сервере + restore/upload/delete с локальной валидацией архива (`inspect_archive` режет tar-slip/absolute/symlink-escape до любого remote-extract); вызывающий код подключает SSH |
+| `services/server_stats.py` | Сбор host-статистики (uptime/load/memory/disk/network) для эндпоинта stats сервера; вызывается из `routers/servers.py` |
 | `warp_service.py` | Чистая логика Cloudflare WARP (state store, MTU budget, quota); SSH-оркестрация в `app.py` |
 | `managers/split_tunnel.py` | Split-tunnel AllowedIPs: список сетей, которые обходят VPN, вшивается в каждый клиентский конфиг |
 

@@ -41,8 +41,14 @@
 ## Legacy `data.json`
 
 - `DATA_FILE` в `app.py` (env `DATA_FILE`) — путь, который бэкапит `_background_backup`; не источник данных (всё в БД)
+- `awg_plugin_ops.json` — runtime-артефакт рядом с `DATA_FILE` (op-store обновлений AWG-плагина, как `tunnels_state.json`); в `.gitignore`
 - Bearer-аутентификация выполняется `_check_admin()` в `app.py` по таблице `ApiToken`; не добавляй in-memory fallback.
 - `scripts/migrate_secrets.py`, `scripts/migrate_to_postgres.py` — one-shot миграции
+
+## Uninstall и фантомные connections
+
+- `POST /api/servers/{id}/uninstall` (`routers/protocols.py`) удаляет `ServerProtocol`-запись и **purge'ит все `UserConnection`** для пары (server, protocol) — пиры умерли вместе с контейнером.
+- `GET /api/users/{id}/connections` и `GET /api/my/connections` (`routers/users.py`, хелпер `_installed_protocol_pairs`) дополнительно скрывают connections, у которых нет `ServerProtocol`-строки — «пояс» к purge для записей, оставшихся от старых версий. Не выводи полноту списка из ORM-запроса.
 
 ## Dev vs Production
 
