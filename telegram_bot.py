@@ -162,9 +162,9 @@ class TelegramAPI:
     async def answer_callback(self, callback_query_id: str, text: str = ""):
         await self.call("answerCallbackQuery", callback_query_id=callback_query_id, text=text)
 
-    async def send_document(self, chat_id, filename: str, content: bytes, caption: str = "", reply_markup=None, parse_mode="HTML"):
+    async def send_document(self, chat_id, filename: str, content: bytes, caption: str = "", reply_markup=None, parse_mode="HTML", mime: str = "text/plain"):
         import json
-        files = {"document": (filename, content, "text/plain")}
+        files = {"document": (filename, content, mime)}
         data = {"chat_id": str(chat_id), "caption": caption, "parse_mode": parse_mode}
         if reply_markup:
             data["reply_markup"] = json.dumps(reply_markup)
@@ -735,7 +735,12 @@ async def _handle_send_qr(api: TelegramAPI, chat_id: int, callback_id: str, conn
         img.save(bio, format="PNG")
 
         kb = {"inline_keyboard": [[{"text": "🗑️ Закрыть QR", "callback_data": "del_msg"}]]}
-        await api.send_photo(chat_id, photo=bio.getvalue(), caption=f"📷 <b>QR-код:</b> {_e(conn_name)}", reply_markup=kb)
+        # sendPhoto compresses images server-side, which blurs dense QR codes
+        # (long vless:// links) beyond recognition; sendDocument keeps the
+        # original PNG bytes and still renders an image preview.
+        await api.send_document(chat_id, filename="qr.png", content=bio.getvalue(),
+                                mime="image/png",
+                                caption=f"📷 <b>QR-код:</b> {_e(conn_name)}", reply_markup=kb)
     except Exception as e:
         logger.exception("Bot: error sending QR code")
         await api.send_message(chat_id, f"❌ Error: {_e(e)}")

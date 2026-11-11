@@ -100,34 +100,19 @@ async def api_get_connections(request: Request, server_id: int, protocol: str = 
             except Exception:
                 pass
 
-        existing_cids = {uc.client_id for uc in user_conns}
         live_cids = {client.get('clientId') for client in clients if client.get('clientId')}
-        
-        new_conns = []
-        for client in clients:
-            cid = client.get('clientId')
-            if cid and cid not in existing_cids:
-                user_data = client.get('userData', {})
-                name = user_data.get('clientName') or cid
-                new_conn = models.Connection(
-                    server_id=server_id,
-                    user_id=admin_user.id,
-                    protocol=protocol,
-                    client_id=cid,
-                    name=name
-                )
-                db.add(new_conn)
-                new_conns.append(new_conn)
-                existing_cids.add(cid)
-        
+
+        # NOTE: clients without a DB row are intentionally NOT auto-assigned
+        # to the admin — "Без привязки" (no_assign) configs must stay
+        # unowned, and only an explicit bind may create a Connection row.
+
         stale_conns = [uc for uc in user_conns if uc.client_id not in live_cids]
         for stale in stale_conns:
             await db.delete(stale)
             user_conns.remove(stale)
-        
-        if new_conns or stale_conns:
+
+        if stale_conns:
             await db.commit()
-            user_conns.extend(new_conns)
 
         for client in clients:
             cid = client.get('clientId', '')
