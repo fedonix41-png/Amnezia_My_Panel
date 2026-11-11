@@ -14,6 +14,7 @@ from sqlalchemy import select
 from database.session import get_db
 from database.repositories import ServerRepository
 from database import models
+from services.server_stats import collect_host_stats
 
 router = APIRouter(tags=["Servers"])
 
@@ -319,42 +320,9 @@ async def api_server_stats(request: Request, server_id: int, cached: bool = Fals
         def _fetch_stats(ssh_conn):
             try:
                 ssh_conn.connect()
-                stats = {}
-                out, _, _ = ssh_conn.run_command(
-                    "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1 2>/dev/null || "
-                    "awk '{u=$2+$4; t=$2+$4+$5; if(NR==1){pu=u;pt=t} else printf \"%.1f\", (u-pu)/(t-pt)*100}' "
-                    "<(grep 'cpu ' /proc/stat) <(sleep 0.5 && grep 'cpu ' /proc/stat) 2>/dev/null"
-                )
-                try:
-                    stats['cpu'] = round(float(out.strip().split('\n')[0]), 1)
-                except (ValueError, IndexError):
-                    stats['cpu'] = 0
-                out, _, _ = ssh_conn.run_command("free -b | awk 'NR==2{printf \"%d %d\", $3, $2}'")
-                try:
-                    parts = out.strip().split()
-                    used, total = int(parts[0]), int(parts[1])
-                    stats.update(ram_used=used, ram_total=total, ram_percent=round(used / total * 100, 1) if total > 0 else 0)
-                except (ValueError, IndexError):
-                    stats.update(ram_used=0, ram_total=0, ram_percent=0)
-                out, _, _ = ssh_conn.run_command("df -B1 / | awk 'NR==2{printf \"%d %d\", $3, $2}'")
-                try:
-                    parts = out.strip().split()
-                    used, total = int(parts[0]), int(parts[1])
-                    stats.update(disk_used=used, disk_total=total, disk_percent=round(used / total * 100, 1) if total > 0 else 0)
-                except (ValueError, IndexError):
-                    stats.update(disk_used=0, disk_total=0, disk_percent=0)
-                out, _, _ = ssh_conn.run_command(
-                    "DEV=$(ip route | awk '/default/ {print $5}' | head -1); "
-                    "cat /proc/net/dev | awk -v dev=\"$DEV:\" '$1==dev{printf \"%d %d\", $2, $10}'"
-                )
-                try:
-                    parts = out.strip().split()
-                    stats['net_rx'], stats['net_tx'] = int(parts[0]), int(parts[1])
-                except (ValueError, IndexError):
-                    stats['net_rx'] = stats['net_tx'] = 0
-                out, _, _ = ssh_conn.run_command("uptime -p 2>/dev/null || uptime")
-                stats['uptime'] = out.strip()
-                return stats
+                # One marker-framed batched probe instead of ~5 individual
+                # SSH commands; partial results survive a truncated reply.
+                return collect_host_stats(ssh_conn)
             finally:
                 try:
                     ssh_conn.disconnect()
