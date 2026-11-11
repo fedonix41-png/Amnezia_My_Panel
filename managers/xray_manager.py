@@ -9,6 +9,11 @@ import urllib.parse
 
 logger = logging.getLogger(__name__)
 
+# Xray-core release baked into the container image. Bumped with upstream
+# v1.8.10 (CVE-2026-98432 in the v26.3.x line); referenced from
+# _dockerfile_content() via a build ARG.
+XRAY_CORE_VERSION = "v26.10.31"
+
 
 def build_initial_server_json(*, port, site_name, private_key, short_id):
     """Build the initial Xray server.json structure with Stats + Reality inbound.
@@ -208,6 +213,11 @@ class XrayManager:
         return 'Up' in out
 
     def check_protocol_installed(self):
+        _st_fn = getattr(self.ssh, 'docker_container_state', None)
+        if _st_fn:
+            _st = _st_fn(self.container_name)
+            if _st is not None:
+                return _st[0]
         out, _, _ = self.ssh.run_sudo_command(
             f"docker ps -a --filter name=^{self.container_name}$ --format '{{{{.Names}}}}'"
         )
@@ -225,28 +235,14 @@ class XrayManager:
             'port': meta.get('port')
         }
 
-    def install_protocol(self, port=443, site_name='yahoo.com'):
-        if port is not None: port = int(port)
-        """Full installation of Xray."""
-        results = []
-
-        if not self.check_docker_installed():
-            results.append("Installing Docker...")
-            # Using same install method as AWGManager or assume it's installed
-            pass
-
-        results.append("Removing old container if exists...")
-        if self.check_protocol_installed():
-            self.remove_container()
-
-        results.append("Building Docker image...")
+    def _dockerfile_content(self):
         config_dir = self._config_dir()
-        dockerfile_folder = f"/opt/amnezia/{self.container_name}"
-        dockerfile_content = f"""FROM alpine:3.15
+        return f"""FROM alpine:3.15
 RUN apk add --no-cache curl unzip bash openssl netcat-openbsd dumb-init rng-tools xz iptables ip6tables
 RUN apk --update upgrade --no-cache
 RUN mkdir -p {config_dir}
-RUN curl -L -H "Cache-Control: no-cache" -o /root/xray.zip "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip" && \\
+ARG XRAY_RELEASE="{XRAY_CORE_VERSION}"
+RUN curl -L -H "Cache-Control: no-cache" -o /root/xray.zip "https://github.com/XTLS/Xray-core/releases/download/${{XRAY_RELEASE}}/Xray-linux-64.zip" && \\
     unzip /root/xray.zip -d /usr/bin/ && \\
     chmod a+x /usr/bin/xray && \\
     rm /root/xray.zip
@@ -283,6 +279,25 @@ RUN echo '#!/bin/bash' > /opt/amnezia/start.sh && \\
 
 ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
 """
+
+    def install_protocol(self, port=443, site_name='yahoo.com'):
+        if port is not None: port = int(port)
+        """Full installation of Xray."""
+        results = []
+
+        if not self.check_docker_installed():
+            results.append("Installing Docker...")
+            # Using same install method as AWGManager or assume it's installed
+            pass
+
+        results.append("Removing old container if exists...")
+        if self.check_protocol_installed():
+            self.remove_container()
+
+        results.append("Building Docker image...")
+        config_dir = self._config_dir()
+        dockerfile_folder = f"/opt/amnezia/{self.container_name}"
+        dockerfile_content = self._dockerfile_content()
         self.ssh.run_sudo_command(f"mkdir -p {dockerfile_folder}")
         self.ssh.upload_file_sudo(dockerfile_content, f"{dockerfile_folder}/Dockerfile")
         
@@ -700,7 +715,7 @@ ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
 
         return clients_table
 
-    def get_client_config(self, protocol, client_id, server_host, port):
+    def get_client_config(self, protocol, client_id, server_host, port, public_port=None):
         clients = self._get_clients_table()
         client = next((c for c in clients if c['clientId'] == client_id), None)
         if not client: return None
@@ -723,14 +738,16 @@ ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
         encoded_name = urllib.parse.quote(name)
         
         url = (
-            f"vless://{client_id}@{server_host}:{meta.get('port', port)}"
+            # meta.json is synced from the live server.json, so it beats the
+            # port the panel remembers; an explicit public port beats both.
+            f"vless://{client_id}@{server_host}:{public_port or meta.get('port', port)}"
             f"?type=tcp&security=reality&pbk={meta['public_key']}"
             f"&sni={sni}&fp=chrome&sid={meta['short_id']}"
             f"&spx=%2F&flow=xtls-rprx-vision#{encoded_name}"
         )
         return url
 
-    def add_client(self, protocol, client_name, server_host, port):
+    def add_client(self, protocol, client_name, server_host, port, public_port=None):
         client_id = str(uuid.uuid4())
         
         config = self._get_server_json()
@@ -772,7 +789,7 @@ ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
 
         return {
             'client_id': client_id,
-            'config': self.get_client_config(protocol, client_id, server_host, port)
+            'config': self.get_client_config(protocol, client_id, server_host, port, public_port)
         }
 
     def toggle_client(self, protocol, client_id, enable):
@@ -823,3 +840,16 @@ ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
         clients_table = [c for c in clients_table if c['clientId'] != client_id]
         self._save_clients_table(clients_table)
         return True
+
+    def rename_client(self, protocol, client_id, new_name):
+        """Rename a client. The display name lives in clientsTable
+        (userData.clientName) and is embedded into the VLESS URL fragment on
+        the fly, so updating the table is enough — UUID, keys and server.json
+        stay untouched and existing links keep working."""
+        clients_table = self._get_clients_table()
+        client = next((c for c in clients_table if c.get('clientId') == client_id), None)
+        if client is None:
+            raise RuntimeError('Client not found')
+        client.setdefault('userData', {})['clientName'] = new_name
+        self._save_clients_table(clients_table)
+        return {'status': 'success', 'name': new_name}
