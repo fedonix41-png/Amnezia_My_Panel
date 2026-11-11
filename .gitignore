@@ -28,13 +28,21 @@ coverage.xml
 .pytest_cache/
 .mypy_cache/
 
-# User data
+# User data & local SQLite artifacts
 data.json
 data.json.bak*
 backups/
 tunnels_state.json
 awg_plugin_ops.json
+app.db
+*.db-journal
+*.db-wal
+*.db-shm
 .DS_Store
+
+# Downloaded runtime binaries & local scratch scripts
+bin/cloudflared
+scratch_*.py
 
 # Secrets / local env
 .env

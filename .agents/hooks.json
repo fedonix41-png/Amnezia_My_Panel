@@ -1,0 +1,13 @@
+{
+  "python-syntax-gate": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "../venv/bin/python ./hooks/py_compile_check.py",
+        "timeout": 10
+      }
+    ]
+  }
+}
+

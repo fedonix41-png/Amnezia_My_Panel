@@ -26,13 +26,15 @@ app.py              — ядро: хелперы, протоколы, tunnels, a
 config.py           — env-переменные, dev/prod валидация
 middleware.py       — CSRF, SecurityHeaders, PostHog middleware
 telegram_bot.py     — Telegram-бот (raw httpx, long-polling)
-routers/            — 9 FastAPI-роутеров (auth, servers, protocols, connections,
-                      users, sharing, settings, templates, api_tokens)
-managers/           — protocol/infrastructure managers + secrets + amnezia_config
+services/           — общие сервисы (server_stats.py — batch-опрос метрик по SSH)
+routers/            — 10 FastAPI-роутеров (auth, servers, protocols, awg_plugin,
+                      connections, users, sharing, settings, templates, api_tokens)
+managers/           — protocol/infrastructure managers + awg_plugin_updater +
+                      clients_table + traffic_counters + secrets + amnezia_config
 database/           — models.py, session.py, crud.py, repositories.py
 templates/          — 9 Jinja2 HTML-шаблонов с frontend JavaScript
 translations/       — i18n (en, ru, fa, fr, zh)
-tests/              — pytest + FastAPI TestClient
+tests/              — pytest + FastAPI TestClient + tests/managers/ (fake SSH)
 scripts/            — one-shot миграции (secrets, postgres)
 ```
 

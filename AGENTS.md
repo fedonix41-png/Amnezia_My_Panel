@@ -21,7 +21,7 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 - Dev: `AWP_DEV=1`, SQLite, эфемерные ключи, TrustedHost отключён.
 - Production: PostgreSQL/asyncpg, Fernet-шифрование, обязательные `SECRET_KEY` и `MASTER_KEY`.
 
-## Как собирать контекст
+## Как собирать контекст (Экономия токенов и Memory)
 
 Не читай всю кодовую базу перед каждой правкой. До редактирования проследи затрагиваемый поток:
 
@@ -31,6 +31,12 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 4. потребители API в templates/JavaScript и Telegram-боте;
 5. существующие тесты и непокрытые ветки.
 
+**Правила экономии контекста (для всех ИИ-агентов):**
+- **Не читай монолиты целиком:** файлы `managers/awg_manager.py` (~249 КБ), `app.py` (~86 КБ), `telegram_bot.py` (~72 КБ), `managers/awg_plugin_updater.py` (~60 КБ), `managers/wireguard_manager.py` (~52 КБ) и `templates/server.html` (~2200 строк) читай только диапазонами строк вокруг нужного символа (после точечного `grep`).
+- **Используй тематическую память (`docs/terrain/`):** начинай с `docs/terrain/INDEX.md` и открывай только тот раздел (`01`..`07`), который относится к текущей задаче.
+- **Профильные скиллы по требованию:** краткие чеклисты по подсистемам лежат в `.agents/skills/` (и `.kilo/skills/`). Подгружай только скилл, релевантный задаче.
+- **Игнорируй шум при поиске:** не индексируй `venv/`, `.git/`, `__pycache__/`, `.pytest_cache/`, `.kilo/node_modules/`, `bin/`, `app.db`, `openapi.json`.
+
 Для сложной межслойной правки сначала кратко зафиксируй инварианты и минимальный набор файлов. Не выводи контракт только из одного manager или router.
 
 ## Карта кода
@@ -38,14 +44,14 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 - `app.py` — FastAPI app, auth helpers, protocol registry/factory, tunnels, background jobs, lifespan.
 - `config.py` — загрузка `.env`, boot-time валидация `SECRET_KEY`/`MASTER_KEY` (SystemExit при ошибке вне `AWP_DEV=1`).
 - `middleware.py` — CSRF, security headers, rate limiting; порядок стека задокументирован комментарием у `add_middleware` в `app.py`.
-- `services/` — package для общих service-функций, разделяемых роутерами и Telegram-ботом (пока пуст).
-- `routers/` — HTTP API и HTML entry points.
-- `managers/` — SSH и реализации протоколов.
+- `services/` — общие service-функции, разделяемые роутерами и фоновыми задачами (`server_stats.py` — пакетный сбор метрик хоста и контейнеров по SSH).
+- `routers/` — 10 модулей HTTP API и HTML entry points (`auth`, `servers`, `protocols`, `awg_plugin`, `connections`, `users`, `sharing`, `settings`, `templates`, `api_tokens`).
+- `managers/` — `ssh_manager.py`, реализации протоколов (`awg_manager.py`, `wireguard_manager.py`, `xray_manager.py`, `telemt_manager.py`, `socks5_manager.py`, `adguard_manager.py`, `nginx_manager.py`, `dns_manager.py`), а также специализированные модули (`awg_plugin_updater.py`, `backup_manager.py`, `amnezia_config.py`, `clients_table.py`, `traffic_counters.py`, `split_tunnel.py`, `secrets.py`).
 - `database/` — ORM, sessions, repositories, settings CRUD.
 - `telegram_bot.py` — in-process long-polling без `python-telegram-bot`.
 - `templates/` — Jinja2 и значительная часть frontend JavaScript.
 - `static/` — CSS и статические assets.
-- `tests/` — pytest, FastAPI TestClient, in-memory SQLite, SSH mocks.
+- `tests/` — pytest, FastAPI TestClient (`test_*.py`) и модульные тесты менеджеров с fake SSH (`tests/managers/test_*.py`).
 - `docs/terrain/INDEX.md` — тематический указатель; читай только разделы, связанные с задачей.
 
 ## Ключевые контракты
