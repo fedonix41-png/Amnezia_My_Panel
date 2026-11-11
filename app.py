@@ -2033,7 +2033,7 @@ async def periodic_background_tasks():
 
 # ======================== ROUTERS REGISTRATION ========================
 
-from routers import auth, templates as templates_router, servers as servers_router, protocols as protocols_router, connections as connections_router, users as users_router, sharing as sharing_router, settings as settings_router, api_tokens as api_tokens_router
+from routers import auth, templates as templates_router, servers as servers_router, protocols as protocols_router, connections as connections_router, users as users_router, sharing as sharing_router, settings as settings_router, api_tokens as api_tokens_router, awg_plugin as awg_plugin_router
 
 app.include_router(auth.router)
 app.include_router(templates_router.router)
@@ -2044,6 +2044,7 @@ app.include_router(users_router.router)
 app.include_router(sharing_router.router)
 app.include_router(settings_router.router)
 app.include_router(api_tokens_router.router)
+app.include_router(awg_plugin_router.router)
 
 
 # ======================== PAGE ROUTES ========================

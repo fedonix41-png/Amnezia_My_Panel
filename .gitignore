@@ -33,6 +33,7 @@ data.json
 data.json.bak*
 backups/
 tunnels_state.json
+awg_plugin_ops.json
 .DS_Store
 
 # Secrets / local env
