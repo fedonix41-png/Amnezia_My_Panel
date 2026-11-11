@@ -22,15 +22,19 @@
 
 ## AWG version detection
 
-`_detect_awg_version()`:
+`_detect_awg_version()` (порядок зеркалирует `AWGManager.get_server_status` — версию определяют только ключи конфига):
 
 | Условие | Версия |
 |---|---|
-| S3 + S4 present | `"2"` (AWG 2.0) |
+| RandomTrailers / DisableCookies с любым непустым значением (вкл. `"off"`) | `"3.1"` |
+| HeaderProtectionKey present | `"3.x"` |
+| S3 **и** S4 present | `"2"` |
 | I1-I5 present, S3/S4 absent | `"1.5"` |
 | Иначе | `None` (legacy WireGuard) |
 
-### AWG 2.0 obfuscation params
+⚠️ **Контейнер в native JSON всегда `amnezia-awg`** (proto key `awg`) для КАЖДОЙ версии AWG — повторение upstream `build_amnezia_config()`. Официальный клиент ставит AWG 3.x в `amnezia-awg2` и определяет версию по ключам конфига, а не по имени контейнера; неизвестный ключ `awg3` в JSON клиент показывает как «Not Installed». `protocol_hint` в сигнатурах `_build_wg_json`/`build_amnezia_config` сохранён только для совместимости вызовов и имя контейнера НЕ меняет.
+
+### AWG 2.0 / 3.x obfuscation params
 
 | Параметр | Описание |
 |---|---|
@@ -39,8 +43,12 @@
 | S3, S4 | **AWG 2.0 only** — additional sizes |
 | H1, H2, H3, H4 | Header init values. В 2.0 — **non-overlapping ranges** |
 | I1-I5, CPS | **AWG 1.5** — init packet chain + CPS |
+| HeaderProtectionKey, ContentPaddingAddition, RekeyAfterTime, RekeyTimeout, RejectAfterTime, KeepaliveTimeout, MaxHandshakeAttempts | **AWG 3.x** (`_AWG3_FIELDS`, порядок = `AWG3_PARAM_MAP` в `awg_manager.py`) |
+| RandomTrailers, DisableCookies | **AWG 3.1** — маркеры версии (`_AWG3_VERSION_MARKERS`) |
 
-`generate_awg_params(use_ranges=True)` в `managers/awg_manager.py` — для AWG 2.0 генерирует H как непересекающиеся диапазоны.
+`generate_awg_params(use_ranges=True, awg3=False)` в `managers/awg_manager.py` — для AWG 2.0 генерирует H как непересекающиеся диапазоны; `awg3=True` добавляет HeaderProtectionKey + 3.1-маркеры (по умолчанию `'on'`).
+
+⚠️ **Версия-маркерные ключи эмитятся только при реальном наличии** в конфиге: пустые S3/S4 в proto-секции читаются клиентом как «2.0» и маскируют AWG 1.5; пустые CPS/AWG3-ключи ломают детект 3.x. Отсутствующие ключи → в proto-секцию и `last_config` не попадают вообще.
 
 ## vpn:// link format
 
@@ -82,11 +90,14 @@ Reverse-engineered под Amnezia C++ `extractConfigFromQr` decoder:
   "configData": {
     "Jc": 3, "Jmin": 50, "Jmax": 1000,
     "S1": 17, "S2": 83, "S3": 44, "S4": 61,
-    "H1": "...", "H2": "...", "H3": "...", "H4": "..."
+    "H1": "...", "H2": "...", "H3": "...", "H4": "...",
+    "protocol_version": "3.1"
   },
   "last_config": "<raw .conf text>"
 }
 ```
+
+`protocol_version` в proto-секцию попадает только для AWG и только когда `_detect_awg_version` вернул не-None.
 
 ## Где используется
 

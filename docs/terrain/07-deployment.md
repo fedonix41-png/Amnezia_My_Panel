@@ -71,12 +71,36 @@ WARP Docker Compose:
 Новый VPN-протокол подключается через duck-typed интерфейс (без базового класса). Точки интеграции:
 
 - **Менеджер** в `managers/<name>_manager.py` — реализует требуемые call sites methods: `check_*`, `install_protocol`, `remove_container`, client/config/status methods. Единого формального interface нет; нужно задать сигнатуры и добавить contract tests. `AWGManager` полезен как multi-instance reference, но не как универсальный шаблон сигнатур.
-- **Реестр** в `app.py`: `BASE_PROTOCOLS`, при multi-instance — `MULTI_INSTANCE_PROTOCOLS`, ветка в `get_protocol_manager()`.
+- **Реестр** в `app.py`: `BASE_PROTOCOLS`, при multi-instance — `MULTI_INSTANCE_PROTOCOLS`, при клиентском трафике — `CLIENT_TRAFFIC_BASES`, ветка в `get_protocol_manager()`.
 - **Имена/названия**: `protocol_container_name()` и `protocol_display_name()`.
 - **Конфиг** в `amnezia_config.py` — если протокол отдаёт конфиг Amnezia-клиенту.
-- **Трафик**: если протокол учитывает трафик, добавить его в список `_scrape_server_traffic()` (см. [03-infra](03-infrastructure.md)).
+- **Трафик**: если протокол учитывает трафик, добавить его в `CLIENT_TRAFFIC_BASES` (см. [02-core](02-core.md)) и убедиться, что менеджер реализует `get_traffic_snapshot`/`get_clients`.
 - **Telegram**: callback-обработчики в `telegram_bot.py`.
 - **Тесты**: моки SSH в `tests/managers/`, без реальных сокетов.
+
+### Реестр протоколов (после порта upstream)
+
+| Base | Display | Container | Multi-instance | Клиентский трафик |
+|---|---|---|---|---|
+| `awg` | AmneziaWG | `amnezia-awg[-N]` | ✅ | ✅ |
+| `awg2` | AmneziaWG 2.0 | `amnezia-awg2[-N]` | ✅ | ✅ |
+| `awg3` | AmneziaWG 3.1 | `amnezia-awg3[-N]` | ✅ | ✅ |
+| `awg_legacy` | AmneziaWG Legacy | `amnezia-awg-legacy[-N]` | ✅ | ✅ |
+| `wireguard` | WireGuard | `amnezia-wireguard` | ❌ | ✅ |
+| `xray` | Xray | `amnezia-xray[-N]` | ✅ | ✅ |
+| `telemt` | Telemt | `telemt[-N]` | ✅ | ✅ |
+| `socks5` | SOCKS5 | `amnezia-socks5proxy[-N]` | ✅ | ❌ |
+| `dns` | AmneziaDNS | `amnezia-dns` | ❌ | ❌ |
+| `adguard` | AdGuard Home | `amnezia-adguard` | ❌ | ❌ |
+| `nginx` | NGINX | `amnezia-nginx` | ❌ | ❌ |
+
+Все AWG-базы (`awg`/`awg2`/`awg3`) обслуживает один `AWGManager`, версия выбирается по base из protocol key. Install-эндпоинт (`routers/protocols.py`) для AWG-баз принимает `mtu`/`dns`/`dns6`/`special_junk` и выполняет **used-port check**: явный `port`, занятый другим протоколом сервера, → 400 `Port N is already used by <proto>`.
+
+## Отклонения от upstream-порта (зафиксированные решения)
+
+1. **`warp_service.py` + `managers/split_tunnel.py` портированы** — незадекларированные зависимости `awg_manager` из upstream. Оба stdlib-only, покрыты unit-тестами без SSH/Docker.
+2. **Маппинг контейнера по `protocol_hint` отменён.** Исходный план предполагал, что `awg3`-hint в `amnezia_config` переименует контейнер в `amnezia-awg3`; реальный клиент Amnezia не знает ключ `awg3` и показывает «Not Installed». Upstream держит `amnezia-awg` для всех версий AWG (см. [06-vpn-formats](06-vpn-formats.md)).
+3. **Полный порт `xray_manager` НЕ сделан** — перенесены только точечные фиксы: adu-payload с `port`/`listen` (Xray-core v26 молча добавляет 0 пользователей без них) и `"Added 0 user"` как ошибка; `bbr` вместо `hybla` в sysctl контейнера. Полный порт — WP3.5.
 
 ## Smoke Test Checklist (кратко)
 

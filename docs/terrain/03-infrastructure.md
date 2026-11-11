@@ -79,7 +79,7 @@
 | `_bg_backup` (`_background_backup`) | `BACKUP_INTERVAL_HOURS` (по умолч. 6ч); `0` — отключено | Копия `DATA_FILE` с timestamps, pruning по `BACKUP_KEEP_COUNT` |
 
 `periodic_background_tasks` также:
-- `_scrape_server_traffic()` — **не** `wg show all`: перебирает протоколы `['awg','awg2','awg_legacy','xray','telemt','wireguard']`, для каждого вызывает `get_clients` и агрегирует `dataReceivedBytes` + `dataSentBytes`. Добавление нового протокола требует обновления этого списка.
+- `_scrape_server_traffic()` — **не** `wg show all`: перебирает установленные протоколы сервера, фильтрует по `CLIENT_TRAFFIC_BASES` (`app.py`), для каждого вызывает менеджера и предпочитает **`get_traffic_snapshot`** (точные счётчики, никогда не падает на clientsTable-кэш) с fallback на `get_clients` (display-данные с cache fallbacks). Снапшот берётся из `managers/traffic_counters.read_transfer_snapshot()` — маркер-фреймированный `show transfer` (`COUNTERS_V1`), скобки epoch-идентичности контейнера/интерфейса/sockets делают учёт restart-safe: после рестарта контейнера счётчики обнуляются, но delta-логика (`curr < last` → `curr`) не теряет трафик. Добавление нового протокола требует обновления `CLIENT_TRAFFIC_BASES` и реализации `get_traffic_snapshot`/`get_clients` в менеджере.
 - Сброс трафика по `User.traffic_reset_strategy` (`daily`/`weekly`/`monthly`/`never`) — сравнивает `last_reset_at` с текущим временем.
 - Проверяет лимиты трафика → автоотключение
 - Проверяет `expiration_date` → автоотключение
@@ -99,7 +99,7 @@
 | Протокол | Container | Image | Порт |
 |---|---|---|---|
 | `wireguard` | `amnezia-wireguard` | `amneziavpn/amnezia-wg:latest` (built) | 51820/UDP |
-| `awg`, `awg2` | `amnezia-awg[-N]` | `amneziavpn/amneziawg-go:latest` | 55424/UDP |
+| `awg`, `awg2`, `awg3` | `amnezia-awg[-N]` / `amnezia-awg2[-N]` / `amnezia-awg3[-N]` | `amneziavpn/amneziawg-go:latest` | 55424/UDP |
 | `awg_legacy` | `amnezia-awg-legacy` | `amneziavpn/amnezia-wg:latest` | 55424/UDP |
 | `xray` | `amnezia-xray[-N]` | `alpine:3.15` + Xray v26 (built) | 443 TCP+UDP |
 | `telemt` | `telemt[-N]` | Локальная сборка (docker compose) | 443, 9091 |

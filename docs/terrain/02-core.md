@@ -5,9 +5,10 @@
 ## Реестр протоколов
 
 ```python
-BASE_PROTOCOLS = ['awg', 'awg2', 'awg_legacy', 'xray', 'telemt', 'dns',
+BASE_PROTOCOLS = ['awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'dns',
                   'wireguard', 'socks5', 'adguard', 'nginx']
-MULTI_INSTANCE_PROTOCOLS = {'awg','awg2','awg_legacy','xray','telemt','socks5'}
+MULTI_INSTANCE_PROTOCOLS = {'awg','awg2','awg3','awg_legacy','xray','telemt','socks5'}
+CLIENT_TRAFFIC_BASES = ('awg', 'awg2', 'awg3', 'awg_legacy', 'xray', 'telemt', 'wireguard')
 ```
 
 Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номер).
@@ -18,9 +19,11 @@ Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номе
 | `protocol_instance(p)` | `app.py` | `awg__2` → `2` (default 1) |
 | `protocol_key(base, inst)` | `app.py` | `awg` + `2` → `awg__2` |
 | `next_protocol_key(protos, base)` | `app.py` | Следующий свободный instance |
-| `protocol_display_name(p)` | `app.py` | `awg` → `AmneziaWG` |
-| `protocol_container_name(p)` | `app.py` | `awg__2` → `amnezia-awg-2` |
+| `protocol_display_name(p)` | `app.py` | `awg` → `AmneziaWG`, `awg3` → `AmneziaWG 3.1` |
+| `protocol_container_name(p)` | `app.py` | `awg__2` → `amnezia-awg-2`, `awg3` → `amnezia-awg3` |
 | `is_valid_protocol(p)` | `app.py` | Проверка по `BASE_PROTOCOLS` |
+
+`CLIENT_TRAFFIC_BASES` — единственный список протоколов, чьи менеджеры отдают per-peer счётчики (`get_clients`/`get_traffic_snapshot`). Фоновый traffic sync (`_scrape_server_traffic`) фильтрует по нему и пропускает service-протоколы (dns/socks5/adguard/nginx), которые иначе молча упали бы на fallback к `AWGManager`.
 
 ## Фабрика менеджеров
 
@@ -28,7 +31,7 @@ Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номе
 
 | base_protocol | Класс | Модуль |
 |---|---|---|
-| `awg`, `awg2`, `awg_legacy` | `AWGManager` | `managers.awg_manager` |
+| `awg`, `awg2`, `awg3`, `awg_legacy` | `AWGManager` | `managers.awg_manager` |
 | `xray` | `XrayManager` | `managers.xray_manager` |
 | `telemt` | `TelemtManager` | `managers.telemt_manager` |
 | `wireguard` | `WireGuardManager` | `managers.wireguard_manager` |
@@ -45,6 +48,43 @@ Multi-instance: ключи `awg`, `awg__2`, `awg__3` (база + `__` + номе
 - `getattr(manager, method)` — динамический dispatch
 
 `_manager_call` не является полной адаптер-абстракцией. `install_protocol` и `remove_container` в `routers/protocols.py` вызываются по явным веткам. Xray хранит protocol key в manager instance, но его client methods имеют смешанные сигнатуры. Перед рефакторингом проверяй method definition и все call sites.
+
+## Контракты менеджеров (порт upstream v1.8.10)
+
+### client methods с `public_port`
+
+`AWGManager` и `WireGuardManager` принимают опциональный `public_port` — порт, который клиенты набирают, когда он отличается от instance-порта (port sharing / NAT):
+
+- `AWGManager.add_client(protocol_type, client_name, server_host, port, public_port=None, ...)`
+- `AWGManager.get_client_config(protocol_type, client_id, server_host, port, public_port=None, ...)`
+- `WireGuardManager.add_client(client_name, server_host, public_port=None)` (instance-порт менеджер знает сам)
+- `WireGuardManager.get_client_config(client_id, server_host, port=None, public_port=None)`
+
+`Endpoint = {server_host}:{public_port or port}`. Остальные менеджеры `public_port` не принимают.
+
+### Поля `get_server_status` (AWG/WG)
+
+Помимо legacy-полей (`container_exists`, `container_running`, `port`, `awg_params`, `clients_count`) статус AWG/WG содержит:
+
+| Поле | Тип | Назначение |
+|---|---|---|
+| `protocol_version` | str/нет | Версия AWG по ключам конфига: `'3.1'` (RandomTrailers/DisableCookies), `'3.x'` (HeaderProtectionKey), `'2.0'` (base awg2), иначе отсутствует (awg = 1.5) |
+| `header_protection` | bool | Наличие `HeaderProtectionKey` в конфиге |
+| `external_count` | int | Пиры из `awg0.conf`, отсутствующие в clientsTable (нативные клиенты Amnezia); учитываются в `clients_count` |
+
+Версию определяют ТОЛЬКО ключи конфига — контейнерное имя/номер сборки недостоверны (официальный клиент ставит AWG 3.x в `amnezia-awg2`).
+
+### Helper-модули (портированы с upstream)
+
+| Модуль | Назначение |
+|---|---|
+| `managers/clients_table.py` | Атомарная запись clientsTable: приватный staging в /tmp, `docker cp` + rename внутри контейнера, бэкап предыдущей версии `clientsTable.panel-backup`; вызывающий код держит RMW-lock |
+| `managers/clients_table_reader.py` | Strict read-only чтение clientsTable |
+| `managers/traffic_counters.py` | `read_transfer_snapshot(ssh, container, binary, interface)` — маркер-фреймированный `show transfer` (`COUNTERS_V1`), точные int-счётчики без cache fallback; см. [03-infra](03-infrastructure.md) |
+| `warp_service.py` | Чистая логика Cloudflare WARP (state store, MTU budget, quota); SSH-оркестрация в `app.py` |
+| `managers/split_tunnel.py` | Split-tunnel AllowedIPs: список сетей, которые обходят VPN, вшивается в каждый клиентский конфиг |
+
+`warp_service.py` и `split_tunnel.py` — незадекларированные зависимости `awg_manager` из upstream, портированы послойно в этапе 2 (оба stdlib-only, тестируются без SSH/Docker).
 
 ## Криптография
 
