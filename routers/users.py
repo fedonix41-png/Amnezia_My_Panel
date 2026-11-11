@@ -366,6 +366,22 @@ async def api_add_user_connection(request: Request, user_id: str, req: AddUserCo
         return JSONResponse({'error': str(e)}, status_code=500)
 
 
+async def _installed_protocol_pairs(db, conns_models):
+    """(server_id, protocol) pairs that still have a ServerProtocol row.
+
+    Connections pointing anywhere else belong to uninstalled instances; their
+    peers died with the container and every action on them errors out.
+    """
+    server_ids = {c.server_id for c in conns_models}
+    if not server_ids:
+        return set()
+    res = await db.execute(
+        select(models.ServerProtocol.server_id, models.ServerProtocol.protocol_type)
+        .where(models.ServerProtocol.server_id.in_(server_ids))
+    )
+    return {(sid, proto) for sid, proto in res.all()}
+
+
 @router.get('/api/users/{user_id}/connections', tags=["Users"])
 async def api_get_user_connections(request: Request, user_id: str, db: AsyncSession = Depends(get_db)):
     user = await app_module.get_current_user(db, request)
@@ -377,9 +393,16 @@ async def api_get_user_connections(request: Request, user_id: str, db: AsyncSess
     stmt = select(models.Connection).where(models.Connection.user_id == user_id).options(selectinload(models.Connection.server))
     res = await db.execute(stmt)
     conns_models = res.scalars().all()
-    
+
+    # Belt to the uninstall purge's suspenders: hide links whose (server,
+    # protocol) pair no longer exists — the peer is gone with the container,
+    # and every action on such a phantom ends in 'Client not found'.
+    installed = await _installed_protocol_pairs(db, conns_models)
+
     conns = []
     for c in conns_models:
+        if (c.server_id, c.protocol) not in installed:
+            continue
         conns.append({
             'id': c.id,
             'user_id': c.user_id,
@@ -402,9 +425,13 @@ async def api_my_connections(request: Request, db: AsyncSession = Depends(get_db
     stmt = select(models.Connection).where(models.Connection.user_id == user.id).options(selectinload(models.Connection.server))
     res = await db.execute(stmt)
     conns_models = res.scalars().all()
-    
+
+    installed = await _installed_protocol_pairs(db, conns_models)
+
     conns = []
     for c in conns_models:
+        if (c.server_id, c.protocol) not in installed:
+            continue
         conns.append({
             'id': c.id,
             'user_id': c.user_id,
