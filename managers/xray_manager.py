@@ -270,7 +270,7 @@ RUN echo "fs.file-max = 51200" >> /etc/sysctl.conf && \\
     echo "net.ipv4.tcp_rmem = 4096 87380 67108864" >> /etc/sysctl.conf && \\
     echo "net.ipv4.tcp_wmem = 4096 65536 67108864" >> /etc/sysctl.conf && \\
     echo "net.ipv4.tcp_mtu_probing = 1" >> /etc/sysctl.conf && \\
-    echo "net.ipv4.tcp_congestion_control = hybla" >> /etc/sysctl.conf
+    echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
 
 RUN mkdir -p /etc/security && \\
     echo "* soft nofile 51200" >> /etc/security/limits.conf && \\
@@ -419,9 +419,15 @@ ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
         tag = self._get_vless_inbound_tag(config)
         if not tag:
             return False
+        # xray api adu in Xray-core v26 builds a full inbound config from the
+        # payload and silently adds 0 users (exit code 0) when port/listen are
+        # missing (upstream 0b5b003).
+        _ib = self._get_vless_inbound(config) or {}
         payload = {
             "inbounds": [{
                 "tag": tag,
+                "port": _ib.get('port', 443),
+                "listen": "0.0.0.0",
                 "protocol": "vless",
                 "settings": {
                     "clients": [client],
@@ -430,7 +436,7 @@ ENTRYPOINT [ "dumb-init", "/opt/amnezia/start.sh" ]
             }]
         }
         ok, message = self._run_xray_api_json('adu', payload)
-        if not ok:
+        if not ok or 'Added 0 user' in (message or ''):
             logger.warning(f"Xray API add user failed: {message}")
             return False
         return True
