@@ -460,39 +460,63 @@ class TestBuildAwg3Json:
         assert result is not None
         return result["containers"][0]
 
-    def test_container_amnezia_awg3_with_hint(self):
+    def test_container_stays_amnezia_awg(self):
+        # Upstream keeps container "amnezia-awg" for every AWG version: the
+        # client derives 3.x/3.1 from the config keys and does not know an
+        # "awg3" container key (shows up as "Not Installed").
         entry = self._proto_section()
-        assert entry["container"] == "amnezia-awg3"
-        assert "awg3" in entry
-        assert entry["awg3"]["protocol_version"] == "3.x"
+        assert entry["container"] == "amnezia-awg"
+        assert "awg" in entry
+        assert "awg3" not in entry
+        assert entry["awg"]["protocol_version"] == "3.x"
 
-    def test_all_awg3_param_fields_in_proto_section(self):
-        proto = self._proto_section()["awg3"]
-        for key in AWG3_PARAM_KEYS:
-            assert key in proto, f"missing {key} in proto section"
-        assert proto["HeaderProtectionKey"] == "hPk="
-        assert proto["ContentPaddingAddition"] == "24"
-        assert proto["CPS"] == "signature"
-
-    def test_version_31_when_trailers_present(self):
-        proto = self._proto_section(AWG_V3_CONF + "RandomTrailers = 4\n")["awg3"]
-        assert proto["protocol_version"] == "3.1"
-        assert proto["RandomTrailers"] == "4"
-
-    def test_no_hint_keeps_legacy_container_name(self):
-        # Existing awg/awg2 QR codes must not change: without a hint the
-        # container stays amnezia-awg even for 3.x configs (the client
-        # determines the version from the config keys, not the name).
-        for hint in (None, "awg", "awg2"):
+    def test_hint_does_not_rename_container(self):
+        for hint in ("awg3", "awg3__2", None, "awg", "awg2"):
             result = build_amnezia_config(AWG_V3_CONF, hint)
             entry = result["containers"][0]
             assert entry["container"] == "amnezia-awg"
             assert "awg" in entry
-            assert "awg3" not in entry
 
-    def test_multi_instance_hint_suffixes_container(self):
-        result = build_amnezia_config(AWG_V3_CONF, "awg3__2")
-        assert result["containers"][0]["container"] == "amnezia-awg3-2"
+    def test_awg3_param_fields_in_proto_section(self):
+        proto = self._proto_section()["awg"]
+        for key in AWG3_PARAM_KEYS:
+            expected = key in ("HeaderProtectionKey", "ContentPaddingAddition",
+                               "RekeyAfterTime", "RekeyTimeout", "RejectAfterTime",
+                               "KeepaliveTimeout", "MaxHandshakeAttempts")
+            assert (key in proto) == expected, f"unexpected presence of {key}"
+        assert proto["HeaderProtectionKey"] == "hPk="
+        assert proto["ContentPaddingAddition"] == "24"
+        assert proto["CPS"] == "signature"
+
+    def test_awg3_keys_in_last_config(self):
+        proto = self._proto_section()["awg"]
+        last_config = json.loads(proto["last_config"])
+        # Fixture carries 7 of the 9 AWG3 keys; absent ones must be omitted.
+        present = (
+            "HeaderProtectionKey", "ContentPaddingAddition",
+            "RekeyAfterTime", "RekeyTimeout", "RejectAfterTime",
+            "KeepaliveTimeout", "MaxHandshakeAttempts",
+        )
+        for key in present:
+            assert key in last_config, f"missing {key} in last_config"
+        assert "RandomTrailers" not in last_config
+        assert "DisableCookies" not in last_config
+        assert last_config["CPS"] == "signature"
+
+    def test_no_awg3_keys_leak_into_v2_json(self):
+        # awg2 configs must not gain empty AWG3/CPS keys (byte-level
+        # regression guard for existing QR codes).
+        entry = build_amnezia_config(AWG_V2_CONF, "awg2")["containers"][0]
+        proto = entry["awg"]
+        last_config = json.loads(proto["last_config"])
+        for key in AWG3_PARAM_KEYS + ("CPS",):
+            assert key not in proto
+            assert key not in last_config
+
+    def test_version_31_when_trailers_present(self):
+        proto = self._proto_section(AWG_V3_CONF + "RandomTrailers = 4\n")["awg"]
+        assert proto["protocol_version"] == "3.1"
+        assert proto["RandomTrailers"] == "4"
 
     def test_awg3_roundtrip_qr(self):
         qr = generate_qr_content(AWG_V3_CONF, "awg3")
@@ -501,8 +525,9 @@ class TestBuildAwg3Json:
         version = struct.unpack(">I", raw[:4])[0]
         assert version == 0x07C00100
         js = json.loads(zlib.decompress(raw[12:]))
-        assert js["defaultContainer"] == "amnezia-awg3"
-        proto = js["containers"][0]["awg3"]
+        assert js["defaultContainer"] == "amnezia-awg"
+        proto = js["containers"][0]["awg"]
         assert proto["protocol_version"] == "3.x"
         last_config = json.loads(proto["last_config"])
         assert last_config["config"].startswith("[Interface]")
+        assert last_config["HeaderProtectionKey"] == "hPk="

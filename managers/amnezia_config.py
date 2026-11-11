@@ -211,18 +211,14 @@ def _build_wg_json(
     - last_config is pretty-printed JSON (indent=4) matching PHP behaviour.
     """
     is_awg = _AWG_REQUIRED_JUNK.issubset(config_map)
+    # Upstream build_amnezia_config() keeps protocol key "awg" and container
+    # "amnezia-awg" for EVERY AWG version (the official client installs 3.x
+    # into amnezia-awg2 and derives the version from the config keys, not the
+    # container name) — a "awg3" container key is not recognised by the
+    # client and shows up as "Not Installed". protocol_hint therefore does
+    # NOT rename the container; it is kept only for signature compatibility.
     proto_key = "awg" if is_awg else "wireguard"
     container = f"amnezia-{proto_key}"
-    hint_base = str(protocol_hint or "").split("__", 1)[0]
-    if hint_base == "awg3" and is_awg:
-        # Only an explicit hint may rename the container: existing awg/awg2
-        # QR codes must keep their current names (the client does not derive
-        # the version from the container name anyway).
-        proto_key = "awg3"
-        container = "amnezia-awg3"
-        idx = str(protocol_hint).split("__", 1)[1] if "__" in str(protocol_hint) else ""
-        if idx.isdigit() and int(idx) > 1:
-            container = f"amnezia-awg3-{idx}"
 
     host_name, port = _split_endpoint(config_map.get("Endpoint", ""))
 
@@ -236,6 +232,12 @@ def _build_wg_json(
     last_config: dict = {}
     for f in _LC_AWG:
         last_config[f] = config_map.get(f, "")
+    # AWG 3.x keys and CPS mirror upstream build_amnezia_config(): copied into
+    # last_config only when actually present (the client reads them from there
+    # and from the raw config to tell 3.x/3.1 from 2.0).
+    for f in ("CPS",) + _AWG3_FIELDS:
+        if config_map.get(f):
+            last_config[f] = config_map[f]
 
     priv_key = config_map.get("PrivateKey", "")
     pub_key = _derive_pubkey(priv_key)
@@ -277,8 +279,17 @@ def _build_wg_json(
     protocol_version = _detect_awg_version(config_map) if is_awg else None
     if protocol_version is not None:
         proto_section["protocol_version"] = protocol_version
-        for f in ("I1", "I2", "I3", "I4", "I5", "S3", "S4", "CPS") + _AWG3_FIELDS:
-            proto_section[f] = config_map.get(f, "")
+        # Emit version-marker keys only when the config actually carries them:
+        # an empty S3/S4 still reads as "2.0" to the client, mislabelling
+        # AWG 1.5 configs.
+        for f in ("I1", "I2", "I3", "I4", "I5", "S3", "S4"):
+            if config_map.get(f):
+                proto_section[f] = config_map[f]
+        # CPS / AWG3 keys only when the config really carries them — empty
+        # strings for these would alter the client's version detection.
+        for f in ("CPS",) + _AWG3_FIELDS:
+            if config_map.get(f):
+                proto_section[f] = config_map[f]
 
     dns1, dns2 = _extract_dns(config_map, raw_config)
 

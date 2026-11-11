@@ -155,7 +155,7 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
                         domain=req.nginx_domain,
                         email=req.nginx_email,
                     )
-                else:
+                elif install_base in ('awg', 'awg2', 'awg3', 'awg_legacy'):
                     return manager.install_protocol(
                         install_protocol,
                         port=req.port,
@@ -164,6 +164,9 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
                         dns6=req.awg_dns6,
                         special_junk=req.special_junk,
                     )
+                else:
+                    # dns and any future non-awg base: plain port-only call.
+                    return manager.install_protocol(install_protocol, port=req.port)
 
             result = await asyncio.to_thread(_do_install)
             if not isinstance(result, dict):
@@ -198,13 +201,14 @@ async def api_install_protocol(request: Request, server_id: int, req: InstallPro
                     'site_url': result.get('site_url')
                 })
                 
-            proto_record.extra_params = {
+            extra_params = {
                 "awg_params": result.get('awg_params', {}),
-                "mtu": req.awg_mtu,
-                "dns": req.awg_dns,
-                "dns6": req.awg_dns6,
                 "settings": settings
             }
+            for key, value in (("mtu", req.awg_mtu), ("dns", req.awg_dns), ("dns6", req.awg_dns6)):
+                if value is not None:
+                    extra_params[key] = value
+            proto_record.extra_params = extra_params
                 
             if install_protocol in db_protocols:
                 await db.delete(db_protocols[install_protocol])
