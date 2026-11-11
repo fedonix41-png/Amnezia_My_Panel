@@ -4,7 +4,7 @@ import shlex
 
 import tempfile
 from typing import Optional
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Form, UploadFile, File
 from fastapi.responses import JSONResponse, FileResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel
@@ -483,6 +483,120 @@ async def api_protocol_backup_download(request: Request, server_id: int, req: Ba
             except Exception:
                 pass
         return JSONResponse({'error': str(e)}, status_code=500)
+    finally:
+        if ssh:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
+
+@router.post('/api/servers/{server_id}/backups/upload')
+async def api_protocol_backup_upload(request: Request, server_id: int,
+                                     protocol: str = Form(...), file: UploadFile = File(...),
+                                     db: AsyncSession = Depends(get_db)):
+    """Upload a protocol backup archive onto the remote server."""
+    if not await app_module._check_admin(db, request):
+        return JSONResponse({'error': 'Forbidden'}, status_code=403)
+    if not app_module.is_valid_protocol(protocol):
+        return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
+    ssh = None
+    tmp_path = None
+    try:
+        server = await db.get(models.Server, server_id)
+        if not server:
+            return JSONResponse({'error': 'Server not found'}, status_code=404)
+        content = await file.read(BackupManager.MAX_UPLOAD_BYTES + 1)
+        if not content:
+            return JSONResponse({'error': 'Empty file'}, status_code=400)
+        if len(content) > BackupManager.MAX_UPLOAD_BYTES:
+            return JSONResponse({'error': 'Backup file is too large'}, status_code=413)
+        fd, tmp_path = tempfile.mkstemp(prefix='amnezia-backup-upload-', suffix='.tar.gz')
+        os.write(fd, content)
+        os.close(fd)
+        ssh = app_module.get_ssh(server, db)
+        await asyncio.to_thread(ssh.connect)
+        result = await asyncio.to_thread(BackupManager(ssh).upload_backup, protocol, file.filename, tmp_path)
+        if result.get('status') == 'error':
+            return JSONResponse({'error': result.get('message', 'Failed to upload backup')}, status_code=400)
+        return result
+    except Exception as e:
+        app_module.logger.exception("Error uploading protocol backup")
+        return JSONResponse({'error': 'Internal server error'}, status_code=500)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        if ssh:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
+
+@router.post('/api/servers/{server_id}/backups/restore')
+async def api_protocol_backup_restore(request: Request, server_id: int, req: BackupDownloadRequest,
+                                      db: AsyncSession = Depends(get_db)):
+    """Restore a protocol from a backup archive on the remote server."""
+    if not await app_module._check_admin(db, request):
+        return JSONResponse({'error': 'Forbidden'}, status_code=403)
+    if not app_module.is_valid_protocol(req.protocol):
+        return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
+    filename = BackupManager.safe_filename(req.filename)
+    if not filename:
+        return JSONResponse({'error': 'Invalid backup filename'}, status_code=400)
+    ssh = None
+    try:
+        server = await db.get(models.Server, server_id)
+        if not server:
+            return JSONResponse({'error': 'Server not found'}, status_code=404)
+        container = app_module.protocol_container_name(req.protocol)
+        if not container:
+            return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
+        ssh = app_module.get_ssh(server, db)
+        await asyncio.to_thread(ssh.connect)
+        result = await asyncio.to_thread(BackupManager(ssh).restore_backup, req.protocol, container, filename)
+        if result.get('status') == 'error':
+            return JSONResponse({'error': result.get('message', 'Failed to restore backup')}, status_code=500)
+        return result
+    except Exception as e:
+        app_module.logger.exception("Error restoring protocol backup")
+        return JSONResponse({'error': 'Internal server error'}, status_code=500)
+    finally:
+        if ssh:
+            try:
+                await asyncio.to_thread(ssh.disconnect)
+            except Exception:
+                pass
+
+
+@router.post('/api/servers/{server_id}/backups/delete')
+async def api_protocol_backup_delete(request: Request, server_id: int, req: BackupDownloadRequest,
+                                     db: AsyncSession = Depends(get_db)):
+    """Delete one protocol backup archive on the remote server."""
+    if not await app_module._check_admin(db, request):
+        return JSONResponse({'error': 'Forbidden'}, status_code=403)
+    if not app_module.is_valid_protocol(req.protocol):
+        return JSONResponse({'error': 'Unknown protocol'}, status_code=400)
+    filename = BackupManager.safe_filename(req.filename)
+    if not filename:
+        return JSONResponse({'error': 'Invalid backup filename'}, status_code=400)
+    ssh = None
+    try:
+        server = await db.get(models.Server, server_id)
+        if not server:
+            return JSONResponse({'error': 'Server not found'}, status_code=404)
+        ssh = app_module.get_ssh(server, db)
+        await asyncio.to_thread(ssh.connect)
+        result = await asyncio.to_thread(BackupManager(ssh).delete_backup, req.protocol, filename)
+        if result.get('status') == 'error':
+            return JSONResponse({'error': result.get('message', 'Failed to delete backup')}, status_code=404)
+        return result
+    except Exception as e:
+        app_module.logger.exception("Error deleting protocol backup")
+        return JSONResponse({'error': 'Internal server error'}, status_code=500)
     finally:
         if ssh:
             try:
