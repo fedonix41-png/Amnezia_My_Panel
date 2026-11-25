@@ -4,11 +4,12 @@
 
 - Весь Python запускать только через `venv/`: `venv/bin/python`, `venv/bin/pip`, `venv/bin/pytest`.
 - Не использовать `sudo` на хосте.
-- Проверка синтаксиса: `venv/bin/python -m py_compile <file>`.
-- Тесты: `venv/bin/python -m pytest` или точечно `venv/bin/python -m pytest <test> -q`.
-- Тесты используют in-memory SQLite и моки SSH; они не имеют доступа к production-серверам.
+- Проверка синтаксиса: автоматически выполняется `Stop`-хуком (`.agents/hooks/py_compile_check.py`) для всех изменённых `.py`-файлов; вручную при необходимости — `venv/bin/python -m py_compile <file>`.
+- Тесты: `venv/bin/python -m pytest` или точечно `venv/bin/python -m pytest <test> -q`; для сжатия длинных трейсбеков — `repowise distill venv/bin/python -m pytest -q`.
 - Запуск dev-сервера: `venv/bin/uvicorn app:app --reload --port 5000`.
-- Локальный сетап работает с `AWP_DEV=0` и PostgreSQL из `docker-compose.dev.yml` (контейнер `amnezia_db_dev`); `DATABASE_URL` берётся из `.env`. `AWP_DEV=1` — опциональный изолированный режим; не включай его в рабочем окружении: эфемерный `MASTER_KEY` сделает секреты из БД нерасшифруемыми.
+- Режимы работы:
+  - **Локальный и Production (`AWP_DEV=0`)**: PostgreSQL/asyncpg (локально контейнер `amnezia_db_dev` из `docker-compose.dev.yml`), `DATABASE_URL`, `SECRET_KEY` и `MASTER_KEY` из `.env`, Fernet-шифрование.
+  - **Изолированный (`AWP_DEV=1`)**: SQLite, эфемерные ключи, `TrustedHost` отключён. Не включай его в рабочем окружении — эфемерный `MASTER_KEY` сделает секреты из БД нерасшифруемыми.
 - Миграции: `venv/bin/alembic revision --autogenerate -m "<msg>"`, применение — `venv/bin/alembic upgrade head`.
 - Зависимости: `venv/bin/pip install -r requirements.txt`, для тестов также `-r requirements-dev.txt`.
 
@@ -17,9 +18,6 @@
 Self-hosted FastAPI-панель управляет удалёнными VPN-серверами по SSH. Она разворачивает WireGuard, AmneziaWG, Xray, SOCKS5, AdGuard Home, Nginx, DNS и Telemt, а также включает Telegram-бота.
 
 **Стек:** Python 3.12+, FastAPI, async SQLAlchemy, paramiko, Docker Compose.
-
-- Dev: `AWP_DEV=1`, SQLite, эфемерные ключи, TrustedHost отключён.
-- Production: PostgreSQL/asyncpg, Fernet-шифрование, обязательные `SECRET_KEY` и `MASTER_KEY`.
 
 ## Как собирать контекст (Экономия токенов и Memory)
 
@@ -32,10 +30,9 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 5. существующие тесты и непокрытые ветки.
 
 **Правила экономии контекста (для всех ИИ-агентов):**
-- **Не читай монолиты целиком:** файлы `managers/awg_manager.py` (~249 КБ), `app.py` (~86 КБ), `telegram_bot.py` (~72 КБ), `managers/awg_plugin_updater.py` (~60 КБ), `managers/wireguard_manager.py` (~52 КБ) и `templates/server.html` (~2200 строк) читай только диапазонами строк вокруг нужного символа (после точечного `grep`).
-- **Используй тематическую память (`docs/terrain/`):** начинай с `docs/terrain/INDEX.md` и открывай только тот раздел (`01`..`07`), который относится к текущей задаче.
-- **Профильные скиллы по требованию:** краткие чеклисты по подсистемам лежат в `.agents/skills/` (и `.kilo/skills/`). Подгружай только скилл, релевантный задаче.
-- **Игнорируй шум при поиске:** не индексируй `venv/`, `.git/`, `__pycache__/`, `.pytest_cache/`, `.kilo/node_modules/`, `bin/`, `app.db`, `openapi.json`.
+- **Не читай монолиты целиком (используй Repowise):** для `managers/awg_manager.py`, `app.py`, `telegram_bot.py`, `managers/awg_plugin_updater.py`, `managers/wireguard_manager.py` и `templates/server.html` сначала запрашивай граф и сигнатуры через MCP-сервер Repowise (`get_context`, `get_symbol`, `get_risk`), и только затем читай узкий диапазон строк вокруг нужного символа.
+- **Профильные скиллы по требованию:** краткие чеклисты по подсистемам лежат в `.agents/skills/`. Подгружай только скилл, релевантный задаче.
+- **Игнорируй шум при поиске:** не индексируй `venv/`, `.git/`, `__pycache__/`, `.pytest_cache/`, `.repowise/`, `.kilo/`, `bin/`, `app.db`, `openapi.json`.
 
 Для сложной межслойной правки сначала кратко зафиксируй инварианты и минимальный набор файлов. Не выводи контракт только из одного manager или router.
 
@@ -51,8 +48,7 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 - `telegram_bot.py` — in-process long-polling без `python-telegram-bot`.
 - `templates/` — Jinja2 и значительная часть frontend JavaScript.
 - `static/` — CSS и статические assets.
-- `tests/` — pytest, FastAPI TestClient (`test_*.py`) и модульные тесты менеджеров с fake SSH (`tests/managers/test_*.py`).
-- `docs/terrain/INDEX.md` — тематический указатель; читай только разделы, связанные с задачей.
+- `tests/` — pytest, FastAPI TestClient (`test_*.py`) и модульные тесты менеджеров (`tests/managers/test_*.py`).
 
 ## Ключевые контракты
 
@@ -97,19 +93,19 @@ Self-hosted FastAPI-панель управляет удалёнными VPN-с�
 - Не ломай `import app as app_module` без отдельного плана декомпозиции.
 - Не создавай feature-файлы в корне: endpoints идут в `routers/`, protocol logic в `managers/`, общие services — в `services/`.
 - Не добавляй `try/except` без логирования, если ошибка не является ожидаемой и безопасно игнорируемой.
-- Не открывай реальные SSH-сокеты в тестах.
 
 ## Тесты
 
-- HTTP tests: `app_client`; CSRF cookie получается через `GET /login`.
-- Bearer requests освобождены от CSRF.
-- Мокай `SSHManager`, `get_ssh` и protocol managers на границе router↔remote host.
+- Полная изоляция: тесты используют только in-memory SQLite и моки (`SSHManager`, `get_ssh` и protocol managers на границе router↔remote host). Никогда не открывай реальные SSH-сокеты и не обращайся к production-серверам в тестах.
+- HTTP tests: `app_client`; CSRF cookie получается через `GET /login` (Bearer requests освобождены от CSRF).
 - Для изменения endpoint проверь success path, permission/error path и DB side effects.
-- Сначала запускай целевые тесты; полный suite — после их успеха.
+- Сначала запускай целевые тесты; полный suite — после их успеха (используй `repowise distill venv/bin/python -m pytest -q` для экономии контекста).
 
-## Документация по задаче
+## Документация по задаче (`docs/terrain/`)
 
-- API/auth/middleware: `docs/terrain/01-entry-points.md`.
+Начинай навигацию с `docs/terrain/INDEX.md` и открывай только раздел, связанный с текущей задачей:
+
+- API/auth/middleware: `01-entry-points.md`.
 - Protocol registry, manager factory, crypto, config formats: `02-core.md` и `06-vpn-formats.md`.
 - DB, SSH, tunnels, background jobs: `03-infrastructure.md`.
 - Cross-layer flows: `04-critical-paths.md`.

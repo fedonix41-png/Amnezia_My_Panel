@@ -4,7 +4,7 @@ description: "Активировать при масштабном рефакт�
 ---
 # Экономия контекста и навигация по коду
 
-1. **Не читать монолиты целиком**: Файлы `managers/awg_manager.py` (~249 КБ), `app.py` (~86 КБ), `telegram_bot.py` (~72 КБ), `managers/awg_plugin_updater.py` (~60 КБ), `managers/wireguard_manager.py` (~52 КБ) и `templates/server.html` (~2200 строк) читать **только диапазонами строк** (`StartLine`/`EndLine`) после точечного поиска символа через `grep`.
+1. **Не читать монолиты целиком (сначала Repowise)**: Для `managers/awg_manager.py`, `app.py`, `telegram_bot.py`, `managers/awg_plugin_updater.py`, `managers/wireguard_manager.py` и `templates/server.html` сначала запрашивать граф вызовов и сигнатуры через MCP-инструменты Repowise (`get_context`, `get_symbol`, `get_risk`), после чего читать **только узкий диапазон строк** (`StartLine`/`EndLine`).
 2. **Тематическая память (`docs/terrain/`)**: Вместо обхода всей кодовой базы сначала сверяйся с `docs/terrain/INDEX.md` и открывай ровно один профильный файл (`01`..`07`).
-3. **Делегирование поиска**: Если нужно проследить вызовы по 5+ файлам, делегируй разведку read-only субагенту `research`, чтобы в основной диалог вернулась только краткая сводка.
-4. **Исключения при поиске**: Игнорировать `venv/`, `.git/`, `__pycache__/`, `.pytest_cache/`, `.kilo/`, `bin/`, `app.db` и `openapi.json`.
+3. **Делегирование поиска**: Если нужно проследить вызовы по 5+ файлам вне графа Repowise, делегируй разведку read-only субагенту `research`, чтобы в основной диалог вернулась только краткая сводка.
+4. **Исключения при поиске**: Игнорировать `venv/`, `.git/`, `__pycache__/`, `.pytest_cache/`, `.repowise/`, `.kilo/`, `bin/`, `app.db` и `openapi.json`.

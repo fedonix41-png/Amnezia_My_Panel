@@ -1,0 +1,211 @@
+{
+  "last_sync_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+  "docs_mode": "deterministic",
+  "docs_enabled": false,
+  "total_pages": 104,
+  "run_mode": "standard",
+  "git_tier": "full",
+  "git_history_version": 5,
+  "git_history_coverage": {
+    "eligible_files": 92,
+    "files_with_history": 92,
+    "unavailable_files": 0,
+    "retained_commits": 227,
+    "per_file_limit": 5000,
+    "global_commits": 65,
+    "deep_commits": 0,
+    "recent_files": 92,
+    "deep_files": 0,
+    "fallback_files": 0,
+    "complete_through_depth": 65,
+    "workers": 1
+  },
+  "index_scope": {
+    "version": 1,
+    "run_mode": "standard",
+    "content_provenance": "template",
+    "git_tier": "full",
+    "git_commit_cap": 5000,
+    "git_history_coverage": {
+      "eligible_files": 92,
+      "files_with_history": 92,
+      "unavailable_files": 0,
+      "retained_commits": 227,
+      "per_file_limit": 5000,
+      "global_commits": 65,
+      "deep_commits": 0,
+      "recent_files": 92,
+      "deep_files": 0,
+      "fallback_files": 0,
+      "complete_through_depth": 65,
+      "workers": 1
+    },
+    "dropped_files": {
+      "generated": {
+        "count": 0,
+        "paths": [],
+        "truncated": false
+      }
+    },
+    "test_run": false,
+    "file_pages": {
+      "configured_cap": null,
+      "effective_cap": null,
+      "eligible": 33,
+      "generated": 33,
+      "omitted": 0
+    },
+    "analysis": {
+      "unavailable": [],
+      "skipped": []
+    },
+    "upgrade": {
+      "status": "pending",
+      "retryable": true,
+      "completed_stages": [],
+      "next_stage": "generation"
+    },
+    "provider": {
+      "name": null,
+      "model": null,
+      "embedder": "mock",
+      "reused": false,
+      "model_cost_possible": false
+    },
+    "search": {
+      "full_text": "available",
+      "semantic": "unavailable",
+      "next_command": "repowise reindex --embedder ollama"
+    }
+  },
+  "decision_lanes_pending": [
+    "git_archaeology",
+    "pr",
+    "comment"
+  ],
+  "decision_mining": {
+    "adr": {
+      "last_success_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_run_at": "2026-11-25T06:47:55+00:00",
+      "last_run_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_status": "ok"
+    },
+    "comment": {
+      "last_success_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_run_at": "2026-11-25T06:47:55+00:00",
+      "last_run_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_status": "ok"
+    },
+    "git_archaeology": {
+      "last_success_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_run_at": "2026-11-25T06:47:55+00:00",
+      "last_run_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_status": "ok"
+    },
+    "inline_marker": {
+      "last_success_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_run_at": "2026-11-25T06:47:55+00:00",
+      "last_run_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_status": "ok"
+    },
+    "pr": {
+      "last_success_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_run_at": "2026-11-25T06:47:55+00:00",
+      "last_run_commit": "c83332d0eca2cf60cc4a713ef50b7e0538353943",
+      "last_status": "ok"
+    }
+  },
+  "include_submodules": false,
+  "graph_update": {
+    "enabled": true,
+    "mode": "full",
+    "reason": "initial full graph build; incremental cache primed",
+    "files": []
+  },
+  "phase_timings": {
+    "git.blame_index": 0.02,
+    "git.blame_graph": 0.02,
+    "traverse": 0.53,
+    "git.history": 0.9,
+    "git.commit_index": 0.91,
+    "co_change": 0.02,
+    "git.fix_walk": 0.08,
+    "parse": 1.16,
+    "git.repo_totals": 0.46,
+    "graph.imports": 0.04,
+    "graph.type_refs": 0.0,
+    "graph.heritage": 0.0,
+    "graph.calls": 0.83,
+    "graph.dispatch": 0.01,
+    "dynamic_hints": 0.08,
+    "git.files": 3.25,
+    "git.release": 0.0,
+    "git.fix_events": 0.0,
+    "git.episodes": 0.05,
+    "git": 4.67,
+    "graph.metrics": 1.15,
+    "graph.communities": 0.14,
+    "external_systems": 0.01,
+    "persist.security_scan": 1.42,
+    "persist.changes": 0.45,
+    "persist.checkpoint": 2.52,
+    "checkpoint.index": 2.53,
+    "decisions": 0.75,
+    "dead_code": 1.14,
+    "doc_drift": 0.56,
+    "health": 17.85,
+    "knowledge_graph.skeleton": 0.01,
+    "knowledge_graph.curate": 0.03,
+    "checkpoint.analysis": 1.12,
+    "persist.checkpoint_analysis": 1.14,
+    "graph.flows": 0.0,
+    "generation.setup": 0.1,
+    "generation.checkpoint": 0.0,
+    "generation.embed": 0.24,
+    "generation.level1": 0.23,
+    "generation.level2": 0.08,
+    "generation.level3": 0.02,
+    "generation.level4": 0.06,
+    "generation.level5": 0.02,
+    "generation.level8": 0.04,
+    "generation.finalize": 0.04,
+    "onboarding": 0.1,
+    "generation.llm": 1.19,
+    "generation": 1.3,
+    "generation.persist_drain": 0.04,
+    "persist.commit.repository": 0.0,
+    "persist.analysis": 0.9,
+    "persist.commit.analysis": 0.04,
+    "persist.generation": 0.03,
+    "persist.commit.generation": 0.02,
+    "persist.commit.prune": 0.0,
+    "persist.commit.job": 0.01,
+    "persist.fts": 0.03,
+    "persist.planner_stats": 0.02,
+    "persist": 1.1,
+    "run": 31.71
+  },
+  "knowledge_graph": {
+    "version": "1.0.0",
+    "node_count": 556,
+    "layer_count": 6,
+    "tour_steps": 12,
+    "has_summaries": true,
+    "fingerprint": "424a276bd7932bc7"
+  },
+  "config_fingerprint": "476f14737a2b54c418633d209065be5e2a91f261acff40133e775cbeedec3857",
+  "config_dependency_fingerprints": {
+    "traversal": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "git_history": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "health": "594e0c42a3a22127976d1564801ee46ca91f3d761eb56819f9da91ba062024ad",
+    "generation": "f5b7577bdb41ceea81ef4d67218b99dd94011493d5118197cec1adc5ed006161",
+    "state_only": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "other": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  "health_analyzer_version": 46,
+  "security_scanner_version": 7,
+  "renderer_fingerprint": "4507e2bd8f84179171b704391355116b8b82da3eaf63762744d8f406a8860cb2:9e4fbceba77428dafd3ffa2fa40db2f2d5c64561f828e279b282062611acaca2",
+  "last_full_rescore_at": 1794404416.0,
+  "store_format_version": 3,
+  "written_by_version": "0.62.0"
+}

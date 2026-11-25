@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "repowise": {
+      "command": "/home/ozzy/.local/bin/repowise",
+      "args": [
+        "mcp",
+        "/home/ozzy/Документы/Amnezia_My_Panel",
+        "--tools",
+        "lean",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}
