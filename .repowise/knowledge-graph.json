@@ -4,7 +4,7 @@
   "project": {
     "name": "Amnezia_My_Panel",
     "is_monorepo": false,
-    "total_files": 130,
+    "total_files": 132,
     "entry_points": [
       "app.py"
     ],
@@ -458,13 +458,12 @@
       "symbolCount": 0,
       "lineCount": 5,
       "complexity": "simple",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 4,
       "tags": [
         "config"
       ],
-      "summary": "Plugin lifecycle hook definitions.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Plugin lifecycle hook definitions."
     },
     {
       "id": "file:.agents/hooks/py_compile_check.py",
@@ -474,10 +473,41 @@
       "symbolCount": 1,
       "lineCount": 56,
       "complexity": "simple",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 5,
       "tags": [],
-      "summary": "Config module py_compile_check defining main.",
+      "summary": "Config module py_compile_check defining main."
+    },
+    {
+      "id": "file:.agents/plugins/repowise/mcp_config.json",
+      "type": "config",
+      "filePath": ".agents/plugins/repowise/mcp_config.json",
+      "language": "json",
+      "symbolCount": 0,
+      "lineCount": 6,
+      "complexity": "simple",
+      "pagerank": 0.003329,
+      "communityId": 6,
+      "tags": [
+        "config"
+      ],
+      "summary": "Configuration file: mcp_config.json.",
+      "primaryOwner": "Fedonix Nikos"
+    },
+    {
+      "id": "file:.agents/plugins/repowise/plugin.json",
+      "type": "config",
+      "filePath": ".agents/plugins/repowise/plugin.json",
+      "language": "json",
+      "symbolCount": 0,
+      "lineCount": 5,
+      "complexity": "simple",
+      "pagerank": 0.003329,
+      "communityId": 7,
+      "tags": [
+        "config"
+      ],
+      "summary": "Plugin manifest: identity, entry points, and capabilities.",
       "primaryOwner": "Fedonix Nikos"
     },
     {
@@ -488,11 +518,10 @@
       "symbolCount": 0,
       "lineCount": 20,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 6,
+      "pagerank": 0.003329,
+      "communityId": 8,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/fastapi-router-architecture/SKILL.md",
@@ -502,11 +531,10 @@
       "symbolCount": 0,
       "lineCount": 39,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 7,
+      "pagerank": 0.003329,
+      "communityId": 9,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/fernet-secrets-security/SKILL.md",
@@ -516,11 +544,10 @@
       "symbolCount": 0,
       "lineCount": 39,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 8,
+      "pagerank": 0.003329,
+      "communityId": 10,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/long-context-indexer/SKILL.md",
@@ -528,10 +555,10 @@
       "filePath": ".agents/skills/long-context-indexer/SKILL.md",
       "language": "markdown",
       "symbolCount": 0,
-      "lineCount": 38,
+      "lineCount": 40,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 9,
+      "pagerank": 0.003329,
+      "communityId": 11,
       "tags": [],
       "summary": "Documentation: SKILL.md.",
       "primaryOwner": "Fedonix Nikos"
@@ -544,11 +571,10 @@
       "symbolCount": 0,
       "lineCount": 43,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 10,
+      "pagerank": 0.003329,
+      "communityId": 12,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/python-uv-workflow/SKILL.md",
@@ -558,11 +584,10 @@
       "symbolCount": 0,
       "lineCount": 19,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 11,
+      "pagerank": 0.003329,
+      "communityId": 13,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/sqlalchemy-db-workflow/SKILL.md",
@@ -572,11 +597,10 @@
       "symbolCount": 0,
       "lineCount": 41,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 12,
+      "pagerank": 0.003329,
+      "communityId": 14,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/system-environment-context/SKILL.md",
@@ -586,11 +610,10 @@
       "symbolCount": 0,
       "lineCount": 18,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 13,
+      "pagerank": 0.003329,
+      "communityId": 15,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/telegram-bot-architecture/SKILL.md",
@@ -600,11 +623,10 @@
       "symbolCount": 0,
       "lineCount": 37,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 14,
+      "pagerank": 0.003329,
+      "communityId": 16,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:.agents/skills/vpn-protocol-manager/SKILL.md",
@@ -614,11 +636,10 @@
       "symbolCount": 0,
       "lineCount": 55,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 15,
+      "pagerank": 0.003329,
+      "communityId": 17,
       "tags": [],
-      "summary": "Documentation: SKILL.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: SKILL.md."
     },
     {
       "id": "file:AGENTS.md",
@@ -626,10 +647,10 @@
       "filePath": "AGENTS.md",
       "language": "markdown",
       "symbolCount": 0,
-      "lineCount": 269,
+      "lineCount": 273,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 16,
+      "pagerank": 0.003329,
+      "communityId": 18,
       "tags": [],
       "summary": "Documentation: AGENTS.md.",
       "primaryOwner": "Fedonix Nikos"
@@ -642,14 +663,13 @@
       "symbolCount": 3,
       "lineCount": 19,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 17,
+      "pagerank": 0.003329,
+      "communityId": 19,
       "tags": [
         "config",
         "infra"
       ],
-      "summary": "Container image build definition.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Container image build definition."
     },
     {
       "id": "file:GEMINI.md",
@@ -657,10 +677,10 @@
       "filePath": "GEMINI.md",
       "language": "markdown",
       "symbolCount": 0,
-      "lineCount": 59,
+      "lineCount": 64,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 18,
+      "pagerank": 0.003329,
+      "communityId": 20,
       "tags": [],
       "summary": "Documentation: GEMINI.md.",
       "primaryOwner": "Fedonix Nikos"
@@ -673,13 +693,13 @@
       "symbolCount": 192,
       "lineCount": 2157,
       "complexity": "complex",
-      "pagerank": 0.010122,
+      "pagerank": 0.010054,
       "communityId": 1,
       "tags": [
-        "entry_point"
+        "entry_point",
+        "api_contract"
       ],
-      "summary": "Application module app defining custom_redoc, capture_unhandled_exception, _maybe_migrate_legacy_data_file.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module app defining custom_redoc, capture_unhandled_exception, _maybe_migrate_legacy_data_file."
     },
     {
       "id": "file:config.py",
@@ -689,11 +709,10 @@
       "symbolCount": 21,
       "lineCount": 173,
       "complexity": "complex",
-      "pagerank": 0.009646,
+      "pagerank": 0.009581,
       "communityId": 2,
       "tags": [],
-      "summary": "Application module config defining _truthy, _split_csv, _rate_limit_key.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module config defining _truthy, _split_csv, _rate_limit_key."
     },
     {
       "id": "file:database/__init__.py",
@@ -703,11 +722,10 @@
       "symbolCount": 0,
       "lineCount": 0,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 19,
+      "pagerank": 0.003329,
+      "communityId": 21,
       "tags": [],
-      "summary": "Application module __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module __init__."
     },
     {
       "id": "file:database/crud.py",
@@ -717,11 +735,10 @@
       "symbolCount": 2,
       "lineCount": 18,
       "complexity": "simple",
-      "pagerank": 0.003691,
+      "pagerank": 0.003666,
       "communityId": 0,
       "tags": [],
-      "summary": "Application module crud defining get_setting, set_setting.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module crud defining get_setting, set_setting."
     },
     {
       "id": "file:database/models.py",
@@ -731,11 +748,10 @@
       "symbolCount": 12,
       "lineCount": 161,
       "complexity": "moderate",
-      "pagerank": 0.009848,
+      "pagerank": 0.009782,
       "communityId": 0,
       "tags": [],
-      "summary": "Application module models defining utcnow, Base, to_dict.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module models defining utcnow, Base, to_dict."
     },
     {
       "id": "file:database/repositories.py",
@@ -745,11 +761,10 @@
       "symbolCount": 36,
       "lineCount": 261,
       "complexity": "complex",
-      "pagerank": 0.005499,
+      "pagerank": 0.005463,
       "communityId": 0,
       "tags": [],
-      "summary": "Application module repositories defining utcnow, hash_password, UserRepository.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module repositories defining utcnow, hash_password, UserRepository."
     },
     {
       "id": "file:database/session.py",
@@ -759,11 +774,10 @@
       "symbolCount": 5,
       "lineCount": 31,
       "complexity": "moderate",
-      "pagerank": 0.008981,
+      "pagerank": 0.008922,
       "communityId": 0,
       "tags": [],
-      "summary": "Application module session defining get_db, get_db_context.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module session defining get_db, get_db_context."
     },
     {
       "id": "file:docker-compose.dev.yml",
@@ -773,14 +787,13 @@
       "symbolCount": 0,
       "lineCount": 15,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 20,
+      "pagerank": 0.003329,
+      "communityId": 22,
       "tags": [
         "config",
         "infra"
       ],
-      "summary": "Infrastructure definition: docker-compose.dev.yml.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Infrastructure definition: docker-compose.dev.yml."
     },
     {
       "id": "file:docker-compose.warp.yml",
@@ -790,14 +803,13 @@
       "symbolCount": 0,
       "lineCount": 21,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 21,
+      "pagerank": 0.003329,
+      "communityId": 23,
       "tags": [
         "config",
         "infra"
       ],
-      "summary": "Infrastructure definition: docker-compose.warp.yml.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Infrastructure definition: docker-compose.warp.yml."
     },
     {
       "id": "file:docker-compose.yml",
@@ -807,14 +819,13 @@
       "symbolCount": 0,
       "lineCount": 37,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 22,
+      "pagerank": 0.003329,
+      "communityId": 24,
       "tags": [
         "config",
         "infra"
       ],
-      "summary": "Multi-container service orchestration for local development.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Multi-container service orchestration for local development."
     },
     {
       "id": "file:docker-entrypoint-warp.sh",
@@ -824,11 +835,10 @@
       "symbolCount": 0,
       "lineCount": 14,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 23,
+      "pagerank": 0.003329,
+      "communityId": 25,
       "tags": [],
-      "summary": "Application module docker-entrypoint-warp.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module docker-entrypoint-warp."
     },
     {
       "id": "file:docker-entrypoint.sh",
@@ -838,11 +848,10 @@
       "symbolCount": 0,
       "lineCount": 17,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 24,
+      "pagerank": 0.003329,
+      "communityId": 26,
       "tags": [],
-      "summary": "Application module docker-entrypoint.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module docker-entrypoint."
     },
     {
       "id": "file:docs/terrain/01-entry-points.md",
@@ -852,11 +861,10 @@
       "symbolCount": 0,
       "lineCount": 144,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 25,
+      "pagerank": 0.003329,
+      "communityId": 27,
       "tags": [],
-      "summary": "Documentation: 01-entry-points.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 01-entry-points.md."
     },
     {
       "id": "file:docs/terrain/02-core.md",
@@ -866,11 +874,10 @@
       "symbolCount": 0,
       "lineCount": 286,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 26,
+      "pagerank": 0.003329,
+      "communityId": 28,
       "tags": [],
-      "summary": "Documentation: 02-core.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 02-core.md."
     },
     {
       "id": "file:docs/terrain/03-infrastructure.md",
@@ -880,11 +887,10 @@
       "symbolCount": 0,
       "lineCount": 216,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 27,
+      "pagerank": 0.003329,
+      "communityId": 29,
       "tags": [],
-      "summary": "Documentation: 03-infrastructure.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 03-infrastructure.md."
     },
     {
       "id": "file:docs/terrain/04-critical-paths.md",
@@ -894,11 +900,10 @@
       "symbolCount": 0,
       "lineCount": 134,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 28,
+      "pagerank": 0.003329,
+      "communityId": 30,
       "tags": [],
-      "summary": "Documentation: 04-critical-paths.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 04-critical-paths.md."
     },
     {
       "id": "file:docs/terrain/05-gotchas.md",
@@ -908,11 +913,10 @@
       "symbolCount": 0,
       "lineCount": 179,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 29,
+      "pagerank": 0.003329,
+      "communityId": 31,
       "tags": [],
-      "summary": "Documentation: 05-gotchas.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 05-gotchas.md."
     },
     {
       "id": "file:docs/terrain/06-vpn-formats.md",
@@ -922,11 +926,10 @@
       "symbolCount": 0,
       "lineCount": 145,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 30,
+      "pagerank": 0.003329,
+      "communityId": 32,
       "tags": [],
-      "summary": "Documentation: 06-vpn-formats.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 06-vpn-formats.md."
     },
     {
       "id": "file:docs/terrain/07-deployment.md",
@@ -936,11 +939,10 @@
       "symbolCount": 0,
       "lineCount": 200,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 31,
+      "pagerank": 0.003329,
+      "communityId": 33,
       "tags": [],
-      "summary": "Documentation: 07-deployment.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: 07-deployment.md."
     },
     {
       "id": "file:docs/terrain/INDEX.md",
@@ -950,11 +952,10 @@
       "symbolCount": 0,
       "lineCount": 133,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 32,
+      "pagerank": 0.003329,
+      "communityId": 34,
       "tags": [],
-      "summary": "Documentation: INDEX.md.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Documentation: INDEX.md."
     },
     {
       "id": "file:managers/__init__.py",
@@ -964,11 +965,10 @@
       "symbolCount": 0,
       "lineCount": 9,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 33,
+      "pagerank": 0.003329,
+      "communityId": 35,
       "tags": [],
-      "summary": "Application module __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module __init__."
     },
     {
       "id": "file:managers/adguard_manager.py",
@@ -978,11 +978,10 @@
       "symbolCount": 14,
       "lineCount": 295,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module adguard_manager defining AdguardManager, __init__, check_docker_installed.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module adguard_manager defining AdguardManager, __init__, check_docker_installed."
     },
     {
       "id": "file:managers/amnezia_config.py",
@@ -992,11 +991,10 @@
       "symbolCount": 24,
       "lineCount": 401,
       "complexity": "complex",
-      "pagerank": 0.004155,
+      "pagerank": 0.004128,
       "communityId": 2,
       "tags": [],
-      "summary": "Application module amnezia_config defining qt_compress, base64url_encode, _parse_wg_config.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module amnezia_config defining qt_compress, base64url_encode, _parse_wg_config."
     },
     {
       "id": "file:managers/awg_manager.py",
@@ -1006,11 +1004,10 @@
       "symbolCount": 203,
       "lineCount": 6232,
       "complexity": "complex",
-      "pagerank": 0.009335,
+      "pagerank": 0.009273,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module awg_manager defining _awg_batch_lock_of, parse_subnet_indexes, first_free_subnet_index.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module awg_manager defining _awg_batch_lock_of, parse_subnet_indexes, first_free_subnet_index."
     },
     {
       "id": "file:managers/awg_plugin_updater.py",
@@ -1020,11 +1017,10 @@
       "symbolCount": 70,
       "lineCount": 1488,
       "complexity": "complex",
-      "pagerank": 0.013409,
+      "pagerank": 0.01332,
       "communityId": 0,
       "tags": [],
-      "summary": "Application module awg_plugin_updater defining stage_step, PluginUpdateError, __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module awg_plugin_updater defining stage_step, PluginUpdateError, __init__."
     },
     {
       "id": "file:managers/backup_manager.py",
@@ -1034,11 +1030,10 @@
       "symbolCount": 18,
       "lineCount": 539,
       "complexity": "complex",
-      "pagerank": 0.00592,
+      "pagerank": 0.005881,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module backup_manager defining BackupManager, __init__, proto_base.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module backup_manager defining BackupManager, __init__, proto_base."
     },
     {
       "id": "file:managers/clients_table.py",
@@ -1048,11 +1043,10 @@
       "symbolCount": 2,
       "lineCount": 72,
       "complexity": "simple",
-      "pagerank": 0.004035,
+      "pagerank": 0.004008,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module clients_table defining save_clients_table.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module clients_table defining save_clients_table."
     },
     {
       "id": "file:managers/clients_table_reader.py",
@@ -1062,11 +1056,10 @@
       "symbolCount": 1,
       "lineCount": 13,
       "complexity": "simple",
-      "pagerank": 0.004035,
+      "pagerank": 0.004008,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module clients_table_reader defining clients_table_missing.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module clients_table_reader defining clients_table_missing."
     },
     {
       "id": "file:managers/dns_manager.py",
@@ -1076,11 +1069,10 @@
       "symbolCount": 6,
       "lineCount": 119,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module dns_manager defining DNSManager, __init__, install_protocol.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module dns_manager defining DNSManager, __init__, install_protocol."
     },
     {
       "id": "file:managers/nginx_manager.py",
@@ -1090,11 +1082,10 @@
       "symbolCount": 29,
       "lineCount": 380,
       "complexity": "complex",
-      "pagerank": 0.003605,
+      "pagerank": 0.003581,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module nginx_manager defining _q, NginxManager, __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module nginx_manager defining _q, NginxManager, __init__."
     },
     {
       "id": "file:managers/secrets.py",
@@ -1104,11 +1095,10 @@
       "symbolCount": 8,
       "lineCount": 74,
       "complexity": "moderate",
-      "pagerank": 0.007331,
+      "pagerank": 0.007282,
       "communityId": 2,
       "tags": [],
-      "summary": "Application module secrets defining SecretError, _get_fernet, encrypt_secret.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module secrets defining SecretError, _get_fernet, encrypt_secret."
     },
     {
       "id": "file:managers/socks5_manager.py",
@@ -1118,11 +1108,10 @@
       "symbolCount": 19,
       "lineCount": 260,
       "complexity": "complex",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module socks5_manager defining _generate_password, Socks5Manager, __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module socks5_manager defining _generate_password, Socks5Manager, __init__."
     },
     {
       "id": "file:managers/split_tunnel.py",
@@ -1132,11 +1121,10 @@
       "symbolCount": 41,
       "lineCount": 442,
       "complexity": "complex",
-      "pagerank": 0.004035,
+      "pagerank": 0.004008,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module split_tunnel defining default_settings, SplitTunnelError, __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module split_tunnel defining default_settings, SplitTunnelError, __init__."
     },
     {
       "id": "file:managers/ssh_manager.py",
@@ -1146,11 +1134,10 @@
       "symbolCount": 21,
       "lineCount": 272,
       "complexity": "complex",
-      "pagerank": 0.004105,
+      "pagerank": 0.004078,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module ssh_manager defining _sha256_fingerprint, _PinningHostKeyPolicy, __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module ssh_manager defining _sha256_fingerprint, _PinningHostKeyPolicy, __init__."
     },
     {
       "id": "file:managers/telemt_manager.py",
@@ -1160,11 +1147,10 @@
       "symbolCount": 31,
       "lineCount": 756,
       "complexity": "complex",
-      "pagerank": 0.004554,
+      "pagerank": 0.004524,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module telemt_manager defining TelemtManager, __init__, _instance_index.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module telemt_manager defining TelemtManager, __init__, _instance_index."
     },
     {
       "id": "file:managers/traffic_counters.py",
@@ -1174,11 +1160,10 @@
       "symbolCount": 3,
       "lineCount": 83,
       "complexity": "simple",
-      "pagerank": 0.004605,
+      "pagerank": 0.004574,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module traffic_counters defining counter, parse_transfer_snapshot, read_transfer_snapshot.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module traffic_counters defining counter, parse_transfer_snapshot, read_transfer_snapshot."
     },
     {
       "id": "file:managers/wireguard_manager.py",
@@ -1188,11 +1173,10 @@
       "symbolCount": 51,
       "lineCount": 1308,
       "complexity": "complex",
-      "pagerank": 0.005978,
+      "pagerank": 0.005938,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module wireguard_manager defining _wg_clients_table_lock, _serialized_table_write, generate_wg_keypair.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module wireguard_manager defining _wg_clients_table_lock, _serialized_table_write, generate_wg_keypair."
     },
     {
       "id": "file:managers/xray_manager.py",
@@ -1202,11 +1186,10 @@
       "symbolCount": 44,
       "lineCount": 885,
       "complexity": "complex",
-      "pagerank": 0.004554,
+      "pagerank": 0.004524,
       "communityId": 1,
       "tags": [],
-      "summary": "Application module xray_manager defining build_initial_server_json, XrayManager, __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module xray_manager defining build_initial_server_json, XrayManager, __init__."
     },
     {
       "id": "file:middleware.py",
@@ -1216,11 +1199,10 @@
       "symbolCount": 13,
       "lineCount": 127,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 2,
       "tags": [],
-      "summary": "Application module middleware defining _is_bearer, _is_exempt, PostHogRequestContextMiddleware.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module middleware defining _is_bearer, _is_exempt, PostHogRequestContextMiddleware."
     },
     {
       "id": "file:migrations/env.py",
@@ -1230,11 +1212,10 @@
       "symbolCount": 6,
       "lineCount": 66,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 2,
       "tags": [],
-      "summary": "Application module env defining run_migrations_offline, do_run_migrations, run_async_migrations.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module env defining run_migrations_offline, do_run_migrations, run_async_migrations."
     },
     {
       "id": "file:migrations/versions/09aae52530b6_add_missing_indexes.py",
@@ -1244,11 +1225,10 @@
       "symbolCount": 6,
       "lineCount": 45,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 34,
+      "pagerank": 0.003329,
+      "communityId": 36,
       "tags": [],
-      "summary": "Application module 09aae52530b6_add_missing_indexes defining upgrade, downgrade.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module 09aae52530b6_add_missing_indexes defining upgrade, downgrade."
     },
     {
       "id": "file:migrations/versions/3a0e53a92ebd_add_display_order_to_server.py",
@@ -1258,11 +1238,10 @@
       "symbolCount": 6,
       "lineCount": 22,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 35,
+      "pagerank": 0.003329,
+      "communityId": 37,
       "tags": [],
-      "summary": "Application module 3a0e53a92ebd_add_display_order_to_server defining upgrade, downgrade.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module 3a0e53a92ebd_add_display_order_to_server defining upgrade, downgrade."
     },
     {
       "id": "file:migrations/versions/75e7c7b7c43e_initial_migration.py",
@@ -1272,11 +1251,10 @@
       "symbolCount": 6,
       "lineCount": 153,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 36,
+      "pagerank": 0.003329,
+      "communityId": 38,
       "tags": [],
-      "summary": "Application module 75e7c7b7c43e_initial_migration defining upgrade, downgrade.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module 75e7c7b7c43e_initial_migration defining upgrade, downgrade."
     },
     {
       "id": "file:protocol_telemt/Dockerfile",
@@ -1286,14 +1264,13 @@
       "symbolCount": 6,
       "lineCount": 66,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 37,
+      "pagerank": 0.003329,
+      "communityId": 39,
       "tags": [
         "config",
         "infra"
       ],
-      "summary": "Container image build definition.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Container image build definition."
     },
     {
       "id": "file:protocol_telemt/config.toml",
@@ -1303,13 +1280,12 @@
       "symbolCount": 0,
       "lineCount": 51,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 38,
+      "pagerank": 0.003329,
+      "communityId": 40,
       "tags": [
         "config"
       ],
-      "summary": "Configuration file: config.toml.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Configuration file: config.toml."
     },
     {
       "id": "file:protocol_telemt/docker-compose.yml",
@@ -1319,14 +1295,13 @@
       "symbolCount": 0,
       "lineCount": 19,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 39,
+      "pagerank": 0.003329,
+      "communityId": 41,
       "tags": [
         "config",
         "infra"
       ],
-      "summary": "Multi-container service orchestration for local development.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Multi-container service orchestration for local development."
     },
     {
       "id": "file:routers/__init__.py",
@@ -1336,11 +1311,10 @@
       "symbolCount": 0,
       "lineCount": 1,
       "complexity": "simple",
-      "pagerank": 0.003351,
-      "communityId": 40,
+      "pagerank": 0.003329,
+      "communityId": 42,
       "tags": [],
-      "summary": "API module __init__.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "API module __init__."
     },
     {
       "id": "file:routers/api_tokens.py",
@@ -1350,11 +1324,12 @@
       "symbolCount": 5,
       "lineCount": 96,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module api_tokens defining CreateApiTokenRequest, api_list_tokens, api_create_token.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module api_tokens defining CreateApiTokenRequest, api_list_tokens, api_create_token."
     },
     {
       "id": "file:routers/auth.py",
@@ -1364,11 +1339,12 @@
       "symbolCount": 4,
       "lineCount": 82,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module auth defining LoginRequest, api_captcha, api_login.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module auth defining LoginRequest, api_captcha, api_login."
     },
     {
       "id": "file:routers/awg_plugin.py",
@@ -1378,11 +1354,12 @@
       "symbolCount": 20,
       "lineCount": 293,
       "complexity": "complex",
-      "pagerank": 0.003781,
+      "pagerank": 0.003756,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module awg_plugin defining AwgPluginUpdateRequest, _awg_plugin_store_path, _awg_plugin_save.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module awg_plugin defining AwgPluginUpdateRequest, _awg_plugin_store_path, _awg_plugin_save."
     },
     {
       "id": "file:routers/connections.py",
@@ -1392,11 +1369,12 @@
       "symbolCount": 11,
       "lineCount": 381,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module connections defining AddConnectionRequest, EditConnectionRequest, ConnectionActionRequest.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module connections defining AddConnectionRequest, EditConnectionRequest, ConnectionActionRequest."
     },
     {
       "id": "file:routers/protocols.py",
@@ -1406,11 +1384,12 @@
       "symbolCount": 22,
       "lineCount": 897,
       "complexity": "complex",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 1,
-      "tags": [],
-      "summary": "API module protocols defining InstallProtocolRequest, Socks5SettingsRequest, ProtocolRequest.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module protocols defining InstallProtocolRequest, Socks5SettingsRequest, ProtocolRequest."
     },
     {
       "id": "file:routers/servers.py",
@@ -1420,11 +1399,12 @@
       "symbolCount": 14,
       "lineCount": 579,
       "complexity": "complex",
-      "pagerank": 0.003723,
+      "pagerank": 0.003698,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module servers defining AddServerRequest, EditServerRequest, ReorderServersRequest.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module servers defining AddServerRequest, EditServerRequest, ReorderServersRequest."
     },
     {
       "id": "file:routers/settings.py",
@@ -1434,11 +1414,12 @@
       "symbolCount": 24,
       "lineCount": 398,
       "complexity": "complex",
-      "pagerank": 0.003723,
+      "pagerank": 0.003698,
       "communityId": 2,
-      "tags": [],
-      "summary": "API module settings defining TunnelStartRequest, AppearanceSettings, SyncSettings.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module settings defining TunnelStartRequest, AppearanceSettings, SyncSettings."
     },
     {
       "id": "file:routers/sharing.py",
@@ -1448,11 +1429,12 @@
       "symbolCount": 9,
       "lineCount": 236,
       "complexity": "moderate",
-      "pagerank": 0.004034,
+      "pagerank": 0.004007,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module sharing defining ShareSetupRequest, ShareAuthRequest, api_user_share_setup.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module sharing defining ShareSetupRequest, ShareAuthRequest, api_user_share_setup."
     },
     {
       "id": "file:routers/templates.py",
@@ -1462,11 +1444,12 @@
       "symbolCount": 8,
       "lineCount": 142,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module templates defining login_page, set_lang, logout.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module templates defining login_page, set_lang, logout."
     },
     {
       "id": "file:routers/users.py",
@@ -1476,11 +1459,12 @@
       "symbolCount": 14,
       "lineCount": 461,
       "complexity": "moderate",
-      "pagerank": 0.003464,
+      "pagerank": 0.003441,
       "communityId": 0,
-      "tags": [],
-      "summary": "API module users defining AddUserRequest, UpdateUserRequest, ToggleUserRequest.",
-      "primaryOwner": "Fedonix Nikos"
+      "tags": [
+        "api_contract"
+      ],
+      "summary": "API module users defining AddUserRequest, UpdateUserRequest, ToggleUserRequest."
     },
     {
       "id": "file:scripts/manage_users.py",
@@ -1490,11 +1474,10 @@
       "symbolCount": 3,
       "lineCount": 81,
       "complexity": "simple",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [],
-      "summary": "Docs & Tooling module manage_users defining list_users, reset_password, main.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Docs & Tooling module manage_users defining list_users, reset_password, main."
     },
     {
       "id": "file:scripts/migrate_secrets.py",
@@ -1504,11 +1487,10 @@
       "symbolCount": 5,
       "lineCount": 92,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 2,
       "tags": [],
-      "summary": "Docs & Tooling module migrate_secrets defining _backup, _atomic_write_json, migrate.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Docs & Tooling module migrate_secrets defining _backup, _atomic_write_json, migrate."
     },
     {
       "id": "file:scripts/migrate_to_postgres.py",
@@ -1518,11 +1500,10 @@
       "symbolCount": 3,
       "lineCount": 186,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [],
-      "summary": "Docs & Tooling module migrate_to_postgres defining parse_dt, migrate.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Docs & Tooling module migrate_to_postgres defining parse_dt, migrate."
     },
     {
       "id": "file:services/server_stats.py",
@@ -1532,11 +1513,10 @@
       "symbolCount": 3,
       "lineCount": 134,
       "complexity": "moderate",
-      "pagerank": 0.004325,
+      "pagerank": 0.004296,
       "communityId": 0,
       "tags": [],
-      "summary": "Service module server_stats defining collect_host_stats.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Service module server_stats defining collect_host_stats."
     },
     {
       "id": "file:telegram_bot.py",
@@ -1546,11 +1526,10 @@
       "symbolCount": 80,
       "lineCount": 1797,
       "complexity": "complex",
-      "pagerank": 0.005086,
+      "pagerank": 0.005052,
       "communityId": 2,
       "tags": [],
-      "summary": "Application module telegram_bot defining _build_data_dict, is_running, launch_bot.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module telegram_bot defining _build_data_dict, is_running, launch_bot."
     },
     {
       "id": "file:templates/_icons.html",
@@ -1560,11 +1539,10 @@
       "symbolCount": 0,
       "lineCount": 307,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 41,
+      "pagerank": 0.003329,
+      "communityId": 43,
       "tags": [],
-      "summary": "Application module _icons.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module _icons."
     },
     {
       "id": "file:templates/base.html",
@@ -1574,11 +1552,10 @@
       "symbolCount": 0,
       "lineCount": 313,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 42,
+      "pagerank": 0.003329,
+      "communityId": 44,
       "tags": [],
-      "summary": "Application module base.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module base."
     },
     {
       "id": "file:templates/index.html",
@@ -1588,11 +1565,10 @@
       "symbolCount": 0,
       "lineCount": 535,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 43,
+      "pagerank": 0.003329,
+      "communityId": 45,
       "tags": [],
-      "summary": "Application module index.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module index."
     },
     {
       "id": "file:templates/login.html",
@@ -1602,11 +1578,10 @@
       "symbolCount": 0,
       "lineCount": 244,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 44,
+      "pagerank": 0.003329,
+      "communityId": 46,
       "tags": [],
-      "summary": "Application module login.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module login."
     },
     {
       "id": "file:templates/my_connections.html",
@@ -1616,11 +1591,10 @@
       "symbolCount": 0,
       "lineCount": 179,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 45,
+      "pagerank": 0.003329,
+      "communityId": 47,
       "tags": [],
-      "summary": "Application module my_connections.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module my_connections."
     },
     {
       "id": "file:templates/server.html",
@@ -1630,11 +1604,10 @@
       "symbolCount": 0,
       "lineCount": 2970,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 46,
+      "pagerank": 0.003329,
+      "communityId": 48,
       "tags": [],
-      "summary": "Application module server.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module server."
     },
     {
       "id": "file:templates/settings.html",
@@ -1644,11 +1617,10 @@
       "symbolCount": 0,
       "lineCount": 1305,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 47,
+      "pagerank": 0.003329,
+      "communityId": 49,
       "tags": [],
-      "summary": "Application module settings.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module settings."
     },
     {
       "id": "file:templates/user_share.html",
@@ -1658,11 +1630,10 @@
       "symbolCount": 0,
       "lineCount": 237,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 48,
+      "pagerank": 0.003329,
+      "communityId": 50,
       "tags": [],
-      "summary": "Application module user_share.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module user_share."
     },
     {
       "id": "file:templates/users.html",
@@ -1672,11 +1643,10 @@
       "symbolCount": 0,
       "lineCount": 1386,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 49,
+      "pagerank": 0.003329,
+      "communityId": 51,
       "tags": [],
-      "summary": "Application module users.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module users."
     },
     {
       "id": "file:tests/awg_plugin_fixtures.py",
@@ -1686,13 +1656,12 @@
       "symbolCount": 12,
       "lineCount": 51,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 55,
+      "pagerank": 0.003329,
+      "communityId": 57,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_fixtures.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_fixtures."
     },
     {
       "id": "file:tests/conftest.py",
@@ -1702,13 +1671,12 @@
       "symbolCount": 3,
       "lineCount": 35,
       "complexity": "simple",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for conftest.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for conftest."
     },
     {
       "id": "file:tests/managers/test_awg3_in_awg2.py",
@@ -1718,13 +1686,12 @@
       "symbolCount": 9,
       "lineCount": 96,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg3_in_awg2.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg3_in_awg2."
     },
     {
       "id": "file:tests/managers/test_awg_kernel_module.py",
@@ -1734,13 +1701,12 @@
       "symbolCount": 9,
       "lineCount": 45,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_kernel_module.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_kernel_module."
     },
     {
       "id": "file:tests/managers/test_awg_keys.py",
@@ -1750,13 +1716,12 @@
       "symbolCount": 4,
       "lineCount": 24,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_keys.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_keys."
     },
     {
       "id": "file:tests/managers/test_awg_mtu_budget.py",
@@ -1766,13 +1731,12 @@
       "symbolCount": 22,
       "lineCount": 133,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_mtu_budget.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_mtu_budget."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_dependencies.py",
@@ -1782,13 +1746,12 @@
       "symbolCount": 27,
       "lineCount": 326,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_dependencies.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_dependencies."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_kernel_adversarial.py",
@@ -1798,13 +1761,12 @@
       "symbolCount": 22,
       "lineCount": 276,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_kernel_adversarial.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_kernel_adversarial."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_kernel_identity.py",
@@ -1814,13 +1776,12 @@
       "symbolCount": 24,
       "lineCount": 238,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_kernel_identity.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_kernel_identity."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_kernel_update.py",
@@ -1830,13 +1791,12 @@
       "symbolCount": 20,
       "lineCount": 278,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_kernel_update.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_kernel_update."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_sudo.py",
@@ -1846,13 +1806,12 @@
       "symbolCount": 31,
       "lineCount": 310,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_sudo.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_sudo."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_sudo_shell.py",
@@ -1862,13 +1821,12 @@
       "symbolCount": 25,
       "lineCount": 207,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_sudo_shell.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_sudo_shell."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_updater.py",
@@ -1878,13 +1836,12 @@
       "symbolCount": 60,
       "lineCount": 695,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_updater.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_updater."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_userspace_adversarial.py",
@@ -1894,13 +1851,12 @@
       "symbolCount": 24,
       "lineCount": 373,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_userspace_adversarial.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_userspace_adversarial."
     },
     {
       "id": "file:tests/managers/test_awg_plugin_userspace_update.py",
@@ -1910,13 +1866,12 @@
       "symbolCount": 26,
       "lineCount": 370,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_userspace_update.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_userspace_update."
     },
     {
       "id": "file:tests/managers/test_awg_start_script.py",
@@ -1926,13 +1881,12 @@
       "symbolCount": 28,
       "lineCount": 275,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_start_script.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_start_script."
     },
     {
       "id": "file:tests/managers/test_backup_archive_validation.py",
@@ -1942,13 +1896,12 @@
       "symbolCount": 9,
       "lineCount": 138,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for backup_archive_validation.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for backup_archive_validation."
     },
     {
       "id": "file:tests/managers/test_backup_manager.py",
@@ -1958,13 +1911,12 @@
       "symbolCount": 41,
       "lineCount": 275,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for backup_manager.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for backup_manager."
     },
     {
       "id": "file:tests/managers/test_backup_warp_exclude.py",
@@ -1974,13 +1926,12 @@
       "symbolCount": 8,
       "lineCount": 50,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for backup_warp_exclude.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for backup_warp_exclude."
     },
     {
       "id": "file:tests/managers/test_clients_table_atomic_writes.py",
@@ -1990,13 +1941,12 @@
       "symbolCount": 18,
       "lineCount": 244,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for clients_table_atomic_writes.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for clients_table_atomic_writes."
     },
     {
       "id": "file:tests/managers/test_host_stats_batch.py",
@@ -2006,13 +1956,12 @@
       "symbolCount": 16,
       "lineCount": 196,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for host_stats_batch.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for host_stats_batch."
     },
     {
       "id": "file:tests/managers/test_telemt_manager.py",
@@ -2022,13 +1971,12 @@
       "symbolCount": 30,
       "lineCount": 291,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for telemt_manager.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for telemt_manager."
     },
     {
       "id": "file:tests/managers/test_traffic_counters.py",
@@ -2038,13 +1986,12 @@
       "symbolCount": 20,
       "lineCount": 141,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for traffic_counters.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for traffic_counters."
     },
     {
       "id": "file:tests/managers/test_wireguard_keys.py",
@@ -2054,13 +2001,12 @@
       "symbolCount": 2,
       "lineCount": 10,
       "complexity": "simple",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for wireguard_keys.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for wireguard_keys."
     },
     {
       "id": "file:tests/managers/test_wireguard_toggle_verification.py",
@@ -2070,13 +2016,12 @@
       "symbolCount": 19,
       "lineCount": 158,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 3,
       "tags": [
         "test"
       ],
-      "summary": "Tests for wireguard_toggle_verification.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for wireguard_toggle_verification."
     },
     {
       "id": "file:tests/managers/test_xray_config.py",
@@ -2086,13 +2031,12 @@
       "symbolCount": 61,
       "lineCount": 330,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for xray_config.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for xray_config."
     },
     {
       "id": "file:tests/test_amnezia_config.py",
@@ -2102,13 +2046,12 @@
       "symbolCount": 66,
       "lineCount": 481,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 2,
       "tags": [
         "test"
       ],
-      "summary": "Tests for amnezia_config.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for amnezia_config."
     },
     {
       "id": "file:tests/test_api_tokens.py",
@@ -2118,13 +2061,12 @@
       "symbolCount": 20,
       "lineCount": 241,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for api_tokens.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for api_tokens."
     },
     {
       "id": "file:tests/test_auth.py",
@@ -2134,13 +2076,12 @@
       "symbolCount": 16,
       "lineCount": 123,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for auth.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for auth."
     },
     {
       "id": "file:tests/test_awg_plugin_api.py",
@@ -2150,13 +2091,12 @@
       "symbolCount": 25,
       "lineCount": 271,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for awg_plugin_api.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for awg_plugin_api."
     },
     {
       "id": "file:tests/test_core_routes.py",
@@ -2166,13 +2106,12 @@
       "symbolCount": 14,
       "lineCount": 205,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for core_routes.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for core_routes."
     },
     {
       "id": "file:tests/test_helpers.py",
@@ -2182,13 +2121,12 @@
       "symbolCount": 35,
       "lineCount": 249,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 1,
       "tags": [
         "test"
       ],
-      "summary": "Tests for helpers.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for helpers."
     },
     {
       "id": "file:tests/test_protocol_backups_api.py",
@@ -2198,13 +2136,12 @@
       "symbolCount": 36,
       "lineCount": 271,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for protocol_backups_api.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for protocol_backups_api."
     },
     {
       "id": "file:tests/test_secrets.py",
@@ -2214,13 +2151,12 @@
       "symbolCount": 9,
       "lineCount": 41,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 2,
       "tags": [
         "test"
       ],
-      "summary": "Tests for secrets.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for secrets."
     },
     {
       "id": "file:tests/test_server_stats_route.py",
@@ -2230,13 +2166,12 @@
       "symbolCount": 9,
       "lineCount": 105,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for server_stats_route.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for server_stats_route."
     },
     {
       "id": "file:tests/test_share.py",
@@ -2246,13 +2181,12 @@
       "symbolCount": 7,
       "lineCount": 97,
       "complexity": "moderate",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for share.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for share."
     },
     {
       "id": "file:tests/test_telegram_bot_ui.py",
@@ -2262,13 +2196,12 @@
       "symbolCount": 2,
       "lineCount": 54,
       "complexity": "simple",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 2,
       "tags": [
         "test"
       ],
-      "summary": "Tests for telegram_bot_ui.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for telegram_bot_ui."
     },
     {
       "id": "file:tests/test_uninstall_connections.py",
@@ -2278,13 +2211,12 @@
       "symbolCount": 17,
       "lineCount": 165,
       "complexity": "complex",
-      "pagerank": 0.003351,
+      "pagerank": 0.003329,
       "communityId": 0,
       "tags": [
         "test"
       ],
-      "summary": "Tests for uninstall_connections.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Tests for uninstall_connections."
     },
     {
       "id": "file:translations/en.json",
@@ -2294,13 +2226,12 @@
       "symbolCount": 0,
       "lineCount": 518,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 50,
+      "pagerank": 0.003329,
+      "communityId": 52,
       "tags": [
         "config"
       ],
-      "summary": "Configuration file: en.json.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Configuration file: en.json."
     },
     {
       "id": "file:translations/fa.json",
@@ -2310,13 +2241,12 @@
       "symbolCount": 0,
       "lineCount": 571,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 51,
+      "pagerank": 0.003329,
+      "communityId": 53,
       "tags": [
         "config"
       ],
-      "summary": "Configuration file: fa.json.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Configuration file: fa.json."
     },
     {
       "id": "file:translations/fr.json",
@@ -2326,13 +2256,12 @@
       "symbolCount": 0,
       "lineCount": 488,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 52,
+      "pagerank": 0.003329,
+      "communityId": 54,
       "tags": [
         "config"
       ],
-      "summary": "Configuration file: fr.json.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Configuration file: fr.json."
     },
     {
       "id": "file:translations/ru.json",
@@ -2342,13 +2271,12 @@
       "symbolCount": 0,
       "lineCount": 773,
       "complexity": "complex",
-      "pagerank": 0.003351,
-      "communityId": 53,
+      "pagerank": 0.003329,
+      "communityId": 55,
       "tags": [
         "config"
       ],
-      "summary": "Configuration file: ru.json.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Configuration file: ru.json."
     },
     {
       "id": "file:translations/zh.json",
@@ -2358,13 +2286,12 @@
       "symbolCount": 0,
       "lineCount": 469,
       "complexity": "moderate",
-      "pagerank": 0.003351,
-      "communityId": 54,
+      "pagerank": 0.003329,
+      "communityId": 56,
       "tags": [
         "config"
       ],
-      "summary": "Configuration file: zh.json.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Configuration file: zh.json."
     },
     {
       "id": "file:warp_service.py",
@@ -2374,11 +2301,10 @@
       "symbolCount": 62,
       "lineCount": 427,
       "complexity": "complex",
-      "pagerank": 0.003696,
+      "pagerank": 0.003672,
       "communityId": 3,
       "tags": [],
-      "summary": "Application module warp_service defining SrvWarpError, __init__, _norm_uid.",
-      "primaryOwner": "Fedonix Nikos"
+      "summary": "Application module warp_service defining SrvWarpError, __init__, _norm_uid."
     },
     {
       "id": "function:app.py:__init__",
@@ -6062,7 +5988,7 @@
     },
     {
       "source": "file:AGENTS.md",
-      "target": "file:docs/terrain/01-entry-points.md",
+      "target": "file:.agents/hooks/py_compile_check.py",
       "type": "documents",
       "direction": "forward",
       "weight": 0.8,
@@ -6134,7 +6060,7 @@
     },
     {
       "source": "file:GEMINI.md",
-      "target": "file:docs/terrain/INDEX.md",
+      "target": "file:managers/awg_manager.py",
       "type": "documents",
       "direction": "forward",
       "weight": 0.8,
@@ -6142,7 +6068,15 @@
     },
     {
       "source": "file:GEMINI.md",
-      "target": "file:managers/awg_manager.py",
+      "target": "file:managers/awg_plugin_updater.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.8,
+      "hint": "doc_path"
+    },
+    {
+      "source": "file:GEMINI.md",
+      "target": "file:managers/wireguard_manager.py",
       "type": "documents",
       "direction": "forward",
       "weight": 0.8,
@@ -16470,6 +16404,8 @@
       "nodeIds": [
         "file:.agents/hooks.json",
         "file:.agents/hooks/py_compile_check.py",
+        "file:.agents/plugins/repowise/mcp_config.json",
+        "file:.agents/plugins/repowise/plugin.json",
         "file:.agents/skills/editor-diagnostic-filter/SKILL.md",
         "file:.agents/skills/fastapi-router-architecture/SKILL.md",
         "file:.agents/skills/fernet-secrets-security/SKILL.md",
@@ -16780,6 +16716,8 @@
       "nodeIds": [
         "file:.agents/hooks.json",
         "file:.agents/hooks/py_compile_check.py",
+        "file:.agents/plugins/repowise/mcp_config.json",
+        "file:.agents/plugins/repowise/plugin.json",
         "file:.agents/skills/editor-diagnostic-filter/SKILL.md",
         "file:.agents/skills/fastapi-router-architecture/SKILL.md",
         "file:.agents/skills/fernet-secrets-security/SKILL.md",
