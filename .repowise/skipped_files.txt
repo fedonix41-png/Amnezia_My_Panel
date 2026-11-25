@@ -1,2 +1,0 @@
-# Files repowise did not index: path, size, reason (tab-separated)
-bin/cloudflared	38,904 KB	over the size limit for files without a parser
