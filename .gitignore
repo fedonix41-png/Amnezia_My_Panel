@@ -56,3 +56,5 @@ openapi.json
 .vscode/
 .idea/
 .kilo/
+.repowise/
+.claude/
